@@ -1,0 +1,3190 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ART 原子化重组——AI 原生交付的人机混合架构</title>
+  <script>
+    (function(){
+      var s = localStorage.getItem('md-web-theme');
+      if(s==='dark'||(!s&&window.matchMedia('(prefers-color-scheme:dark)').matches)){
+        document.documentElement.setAttribute('data-theme','dark');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #1f2937;
+  --surface: #111827; --surface2: #172033;
+  --text: #e6edf3; --text2: #9ca3af; --text3: #6b7280;
+  --accent: #3fb950; --accent2: #58a6ff; --accent3: #f59e0b;
+  --danger: #f87171; --ok: #34d399;
+  --border: rgba(255,255,255,0.09); --border2: rgba(255,255,255,0.16);
+  --r: 6px; --r-lg: 8px;
+  --font: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #1f2937;
+  --surface: #111827; --surface2: #172033;
+  --text: #e6edf3; --text2: #9ca3af; --text3: #6b7280;
+  --accent: #3fb950; --accent2: #58a6ff; --accent3: #f59e0b;
+  --danger: #f87171; --ok: #34d399;
+  --border: rgba(255,255,255,0.09); --border2: rgba(255,255,255,0.16);
+}}
+[data-theme="dark"] {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #1f2937;
+  --surface: #111827; --surface2: #172033;
+  --text: #e6edf3; --text2: #9ca3af; --text3: #6b7280;
+  --accent: #3fb950; --accent2: #58a6ff; --accent3: #f59e0b;
+  --danger: #f87171; --ok: #34d399;
+  --border: rgba(255,255,255,0.09); --border2: rgba(255,255,255,0.16);
+}
+[data-theme="light"] {
+  --bg: #f6f8fa; --bg2: #ffffff; --bg3: #eaeef2;
+  --surface: #ffffff; --surface2: #f3f4f6;
+  --text: #1f2328; --text2: #656d76; --text3: #8c959f;
+  --accent: #1a7f37; --accent2: #0969da; --accent3: #bc4c00;
+  --danger: #c2410c; --ok: #047857;
+  --border: rgba(0,0,0,0.08); --border2: rgba(0,0,0,0.14);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font); line-height: 1.72; word-break: break-word; overflow-wrap: break-word;
+}
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+#theme-toggle {
+  position: fixed; top: 14px; right: 14px; z-index: 9999;
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border2);
+  background: var(--bg2); color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 8px rgba(0,0,0,.24);
+}
+.side {
+  position: fixed; inset: 0 auto 0 0; width: 300px; overflow-y: auto;
+  background: var(--bg2); border-right: 1px solid var(--border); padding: 28px 20px;
+}
+.side-kicker { font-family: var(--font-mono); color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.side-title { display: block; margin-top: 10px; color: var(--text); font-weight: 700; line-height: 1.35; }
+.side-sub { color: var(--text2); font-size: 12px; margin: 8px 0 18px; }
+.toc { display: grid; gap: 2px; font-size: 12px; }
+.toc a { color: var(--text2); padding: 5px 8px; border-radius: var(--r); }
+.toc a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
+.toc-part { margin-top: 8px; color: var(--accent2) !important; font-weight: 700; }
+.toc-section { padding-left: 18px !important; }
+.shell { margin-left: 300px; padding: 32px 42px 48px; max-width: 1240px; }
+.page-header {
+  background: linear-gradient(180deg, var(--surface), var(--bg2));
+  border: 1px solid var(--border2); border-radius: var(--r-lg); padding: 30px 34px; margin-bottom: 16px;
+}
+.eyebrow { font-family: var(--font-mono); color: var(--accent); font-size: 12px; margin-bottom: 8px; }
+.title { margin: 0; font-size: clamp(24px, 3vw, 38px); line-height: 1.22; letter-spacing: 0; }
+.subtitle { max-width: 900px; color: var(--text2); margin: 12px 0 0; font-size: 15px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.meta-pill, .inline-badge {
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border);
+  background: var(--surface2); border-radius: 999px; padding: 3px 9px; color: var(--text2); font-size: 12px;
+}
+.inline-badge { margin: 0 2px; font-family: var(--font-mono); font-size: 10px; }
+.inline-badge.core { color: var(--accent); border-color: rgba(63,185,80,.35); }
+.inline-badge.instance { color: var(--accent2); border-color: rgba(88,166,255,.35); }
+.inline-badge.warn { color: var(--accent3); border-color: rgba(245,158,11,.4); }
+.inline-badge.ok { color: var(--ok); border-color: rgba(52,211,153,.35); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.metric { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-lg); padding: 16px; }
+.metric-lbl { color: var(--text2); font-size: 12px; }
+.metric-val { color: var(--accent); font-family: var(--font-mono); font-size: 26px; font-weight: 700; margin: 2px 0; }
+.metric-note { color: var(--text2); font-size: 12px; line-height: 1.5; }
+.tab-nav {
+  position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; overflow-x: auto;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
+  padding: 10px 0; margin: 12px 0; scrollbar-width: none;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+.tab {
+  white-space: nowrap; border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+  border-radius: 999px; padding: 7px 12px; cursor: pointer; font: 500 12px var(--font);
+}
+.tab.active, .tab:hover { color: var(--text); border-color: var(--accent2); }
+.toolbar {
+  display: flex; align-items: center; gap: 10px; margin: 10px 0 16px;
+  border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-lg); padding: 10px;
+}
+.search-wrap { flex: 1; display: flex; align-items: center; gap: 8px; color: var(--text3); font-family: var(--font-mono); font-size: 11px; }
+.search-wrap span { white-space: nowrap; word-break: normal; }
+input, select {
+  width: 100%; background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 8px 10px; font-family: var(--font);
+}
+select { width: 130px; }
+#result-count { min-width: 72px; color: var(--text2); font-size: 12px; text-align: right; }
+.content {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 30px 34px;
+}
+h1, h2, h3, h4 { line-height: 1.35; letter-spacing: 0; scroll-margin-top: 72px; }
+.content > h1 {
+  font-size: 25px; border-bottom: 2px solid var(--accent); padding-bottom: 12px; margin-top: 0;
+}
+h2 {
+  color: var(--accent2); font-family: var(--font-mono); font-size: 18px; margin: 34px 0 14px;
+  border-top: 1px solid var(--border); padding-top: 22px;
+}
+h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); }
+h4 { font-size: 14px; margin: 18px 0 8px; color: var(--text2); }
+p, ul, ol { margin: 10px 0; }
+li { margin: 5px 0; }
+blockquote {
+  margin: 16px 0; padding: 12px 16px; border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 0 var(--r) var(--r) 0;
+}
+.table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg2); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 680px; }
+.table-wrap.wide table { min-width: 960px; }
+th { text-align: left; color: var(--accent2); font-family: var(--font-mono); font-size: 11px; padding: 10px 12px; border-bottom: 1px solid var(--border2); background: var(--surface2); }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:hover td { background: var(--surface2); }
+.chart-note { color: var(--text3); font-size: 11px; padding: 7px 12px; border-top: 1px solid var(--border); }
+code {
+  font-family: var(--font-mono); background: var(--surface2); color: var(--accent);
+  padding: 2px 5px; border-radius: 4px; font-size: .88em;
+}
+.code-wrapper { margin: 16px 0; border: 1px solid var(--border2); border-radius: var(--r-lg); overflow: hidden; background: var(--bg); }
+.code-top { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: var(--surface2); color: var(--text2); font-family: var(--font-mono); font-size: 11px; }
+.copy-btn { background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; }
+pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.58; }
+pre code { background: transparent; color: var(--text); padding: 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 26px 0; }
+footer { color: var(--text3); font-size: 12px; text-align: center; padding: 24px 0 0; }
+.hidden-search { display: none !important; }
+@media (max-width: 980px) {
+  .side { display: none; }
+  .shell { margin-left: 0; padding: 22px 16px 36px; }
+}
+@media (max-width: 768px) {
+  body { font-size: 15px; }
+  .shell, .page-header { padding-left: 16px; padding-right: 16px; }
+  .title { font-size: clamp(18px, 5.5vw, 26px); }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .content { padding: 20px 16px; }
+  .tab-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; white-space: nowrap; padding-bottom: 2px; }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  #theme-toggle { top: 10px; right: 10px; width: 30px; height: 30px; font-size: 13px; }
+  pre { font-size: 12px; }
+  table { font-size: 12px; }
+  td, th { padding: 6px 8px; }
+  .toolbar { flex-wrap: wrap; }
+  select { width: 100%; }
+}
+@media (max-width: 480px) {
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+  .metric-val { font-size: 18px; }
+}
+@media print {
+  #theme-toggle, .tab-nav, .toolbar, .side { display: none !important; }
+  .shell { margin: 0; padding: 0; max-width: none; }
+  .content, .page-header, .metric { border: 0.5pt solid #ccc !important; }
+  body { background: white !important; color: black !important; font-size: 11pt; }
+  .content { display: block !important; }
+  a { color: inherit; text-decoration: none; }
+  pre { white-space: pre-wrap; border: 0.5pt solid #ccc !important; }
+  .page-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+  </style>
+</head>
+<body>
+  <button id="theme-toggle" onclick="toggleTheme()" title="切换深色/浅色模式"><span id="theme-icon"></span></button>
+  <aside class="side">
+    <div class="side-kicker">AI Native Delivery</div>
+    <a class="side-title" href="#top">ART 原子化重组——AI 原生交付的人机混合架构</a>
+    <div class="side-sub">v1.10 · 人机混合架构整合报告</div>
+    <div class="toc"><a class="toc-section" href="#v110">整合报告 · v1.10</a>
+<a class="toc-section" href="#_1">摘要</a>
+<a class="toc-part" href="#_2">第一部分 · 背景与诊断</a>
+<a class="toc-section" href="#1-art">1. 当前 ART 的问题</a>
+<a class="toc-section" href="#2-gdc">2. 德勤 GDC 的启示</a>
+<a class="toc-section" href="#3">3. 设计原则的根本性转变</a>
+<a class="toc-part" href="#_3">第二部分 · 架构设计</a>
+<a class="toc-section" href="#4-3-n-agent">4. 原子小队：3人 + N Agent 的人机混合</a>
+<a class="toc-section" href="#5">5. 三角色定位 Core 内核</a>
+<a class="toc-section" href="#6-art-vs-art">6. ART 整体架构（VS / ART 层 — 流动与协同提效）</a>
+<a class="toc-section" href="#7-portfolio">7. Portfolio 层（战略提效与价值流投资组合）</a>
+<a class="toc-part" href="#_4">第三部分 · 理论支撑</a>
+<a class="toc-section" href="#8">8. 赛马与协作的平衡机制</a>
+<a class="toc-section" href="#9">9. 先进公司实践对标</a>
+<a class="toc-section" href="#94-anthropic-2026-05">9.4 Anthropic 生产实践模式（2026-05 更新）Instance 实例</a>
+<a class="toc-part" href="#_5">第四部分 · 实施路径</a>
+<a class="toc-section" href="#10">10. 三阶段路线图（参考实例）</a>
+<a class="toc-section" href="#11">11. 角色转型与能力建设</a>
+<a class="toc-section" href="#12">12. 风险与应对</a>
+<a class="toc-part" href="#_6">第五部分 · 框架可扩展性</a>
+<a class="toc-section" href="#13">13. 内核、扩展点与实践注册表</a>
+<a class="toc-part" href="#_7">第六部分 · 评审与落地校准</a>
+<a class="toc-section" href="#14-stakeholder">14. Stakeholder 评审包</a>
+<a class="toc-section" href="#15-pilot">15. Pilot 选择评分卡</a>
+<a class="toc-section" href="#16">16. 四层度量基线与决策门</a>
+<a class="toc-part" href="#_8">第七部分 · 附录</a>
+<a class="toc-section" href="#a">A. 关联报告索引</a>
+<a class="toc-section" href="#b">B. 核心数据来源</a>
+<a class="toc-section" href="#c">C. 待补充内容</a>
+<a class="toc-section" href="#d">D. 关键术语表</a>
+<a class="toc-section" href="#e">E. 报告生产的多智能体协作过程</a>
+<a class="toc-section" href="#f">F. 实践注册表模板</a></div>
+  </aside>
+  <div class="shell" id="top">
+    <header class="page-header">
+      <div class="eyebrow">Strategic Framework · Technical Operating Model</div>
+      <h1 class="title">ART 原子化重组——AI 原生交付的人机混合架构</h1>
+      <p class="subtitle">将 5-9 人 Scrum Team 重组为 3 人原子小队，通过 N 个 Agent 构建 AI 原生交付闭环，重点是组织级增效而非单点工具替换。</p>
+      <div class="meta-row"><span class="meta-pill"><b>版本</b>整合报告 · v1.10</span>
+<span class="meta-pill"><b>日期</b>2026-05-31</span>
+<span class="meta-pill"><b>作者</b>chang_porsche × Claude Code</span>
+<span class="meta-pill"><b>性质</b>战略框架（非操作手册）</span></div>
+    </header>
+    <section class="metric-grid"><article class="metric"><div class="metric-lbl">团队规模</div><div class="metric-val">5-9 → 3</div><div class="metric-note">传统 Scrum Team 拆分为 3 人原子小队</div></article>
+<article class="metric"><div class="metric-lbl">产出目标</div><div class="metric-val">3-5x</div><div class="metric-note">前提是四层提效模型同时打通</div></article>
+<article class="metric"><div class="metric-lbl">交付节奏</div><div class="metric-val">4-6 周 → 5 天</div><div class="metric-note">从长周期 Story 流转转向短闭环交付</div></article>
+<article class="metric"><div class="metric-lbl">提效层级</div><div class="metric-val">4 层</div><div class="metric-note">Portfolio / ART / VS / Squad 同步优化</div></article></section>
+    <nav class="tab-nav"><button class="tab active" data-target="_2">第一部分 · 背景与诊断</button>
+<button class="tab" data-target="_3">第二部分 · 架构设计</button>
+<button class="tab" data-target="_4">第三部分 · 理论支撑</button>
+<button class="tab" data-target="_5">第四部分 · 实施路径</button>
+<button class="tab" data-target="_6">第五部分 · 框架可扩展性</button>
+<button class="tab" data-target="_7">第六部分 · 评审与落地校准</button>
+<button class="tab" data-target="_8">第七部分 · 附录</button></nav>
+    <div class="toolbar">
+      <label class="search-wrap"><span>search</span><input id="search" type="search" placeholder="搜索章节、表格、术语..." autocomplete="off"></label>
+      <select id="sort" aria-label="排序">
+        <option value="">原文顺序</option>
+        <option value="heading">标题优先</option>
+      </select>
+      <span id="result-count"></span>
+    </div>
+    <main class="content" id="content" data-searchable>
+<h1 id="art-ai" data-anchor="art-ai">ART 原子化重组——AI 原生交付的人机混合架构</h1>
+<h2 id="v110" data-anchor="v110">整合报告 · v1.10</h2>
+<p><strong>日期</strong>: 2026-05-31
+<strong>作者</strong>: chang_porsche × Claude Code
+<strong>性质</strong>: 战略框架（非操作手册）
+<strong>v1.10 修订说明</strong>: 新增 §4.4"与 Agent 的协作模式"——填补报告此前缺失的"三个人类怎么跟 Agent 一起工作"维度。包含：Agent 编排核心原则（五条）、"虚拟公司式多 Agent"批判、过渡期三阶段 Agent 协作演化（个人→共享→团队 Agent）、AI Native 阶段的 Mob Coding 实操方案。
+<strong>v1.9 修订说明</strong>: 三角色叙事重构——从"PO/BA+Dev+QA 三类角色进化"改为"PO+Dev+SM 铁三角极简版"。Harness QA 更名为 Harness Master，定位从 QA/SQA 拓展改为 SM 拓展，职责从纯质量治理改为流程管理+质量治理双肩挑。能力模型调整为流程优先，新增 SM 典型职责的 AI 化描述。
+<strong>v1.8 修订说明</strong>: 引入 Anthropic 长时运行 Agent 研究与 auto mode 设计中的团队-AI 协作工作模型——"初始化-执行分离""特性清单驱动追踪""清洁交接""一次一件事+端到端验证""分级信任边界""拒绝-重试"，补充到 Squad 层交付节奏、Harness QA 质量门与隐性知识蒸馏机制。
+<strong>v1.7 修订说明</strong>: 引入外部理论验证——参考《AI软件工程范式革命》的“闭环优先”方法论、“三类裁判系统”与“场景驱动的隐性知识蒸馏”，补充到 Harness QA 质量治理、风险应对、角色映射与实践注册表各环节。
+<strong>v1.6 修订说明</strong>: 重新校准 Harness QA 定位：从测试中心视角升级为“质量治理 / SQA / 过程护栏”角色，明确 QA 与 QC / V&amp;V / Tester 的区别，并将 AI Agent 定位为验证与测试执行主体。
+<strong>v1.5 修订说明</strong>: 在 v1.4 四层提效模型基础上，新增“评审与落地校准包”：四层评审议程、Pilot 选择评分卡、四层度量基线和决策门，便于从战略框架进入 stakeholder review。
+<strong>v1.4 修订说明</strong>: 引入"四层提效模型"——Squad 是局部提效，整体提效杠杆在 Value Stream / ART / Portfolio 三层。大幅强化 VS / ART 层设计（第 6 章），新增 Portfolio 层章节（第 7 章），风险与角色映射按四层重组。
+<strong>v1.3 修订</strong>: 重新校准三角色定位——三角色不是凭空新造，而是 PO/BA、Dev、QA 三类现有角色在 AI 时代的进化。
+<strong>v1.2 修订</strong>: 重构为"内核 + 实例"双层框架，新增第 12 章和附录 F。
+<strong>v1.1 修订</strong>: 移除 POMASA 误用于组织设计的部分。</p>
+<hr />
+<h2 id="_1" data-anchor="_1">摘要</h2>
+<p>本报告整合了围绕 Porsche CCP ART 重组的研究成果，形成一个 <strong>AI 原生交付的开放框架</strong>。核心主张：</p>
+<blockquote>
+<p><strong>将传统 5-9 人 Scrum Team 拆分为 3 人原子小队（AI Orchestrator + AI Engineer + Harness Master），通过 N 个 AI Agent 实现产出倍增。同样的人，做更多的事——增效不降本。铁三角 = PO → Dev → SM 的 AI 时代极简版。</strong></p>
+</blockquote>
+<p><strong>框架的"内核"与"实例"</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层次</th>
+<th>内容</th>
+<th>变化频率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><span class="inline-badge core">Core</span> 框架内核（稳定）</strong></td>
+<td>三角色定位、人机协作哲学、组织演进方向、可扩展接口</td>
+<td>年度级</td>
+</tr>
+<tr>
+<td><strong><span class="inline-badge instance">Instance</span> 实践实例（可替换）</strong></td>
+<td>具体周期长度、Squad 数量、工具选型、技术指标、对标案例</td>
+<td>月度级</td>
+</tr>
+</tbody>
+</table></div>
+<p>报告中所有具体数字（如"5 天 Story 周期"、"30 个 Squad"、"3-5 倍产出"）和案例（如 Anthropic、Cursor 实践）都属于<strong>当前快照下的参考实例</strong>，会随技术演进被替换。<strong>任何新出现的实践都应能通过附录 F 的"实践注册表"接入框架，无需改动正文内核</strong>。</p>
+<p><strong>关键论点</strong>：
+- 原型来源：德勤 GDC 参访（2026-05-08）观察到的"未来三角色"模型
+- 哲学基础：内部市场化（蒙德拉贡/海尔/韩都衣舍）+ Workflow→Agent 渐进（Anthropic）+ 6 个共同基因（10 家公司）
+- 实施路径：3 阶段渐进改革（参考实例：3 个 PI，可根据组织节奏调整）</p>
+<blockquote>
+<p><strong>方法论说明</strong>：本报告本身由"3 人类 + 多智能体"协作生产——作者主导问题定义和判断，多个 Claude Agent 并行做研究、写作、评审。其底层协作框架借鉴了 POMASA（Pattern Language for Knowledge Engineering with LLM）的若干模式。POMASA 是给 LLM 知识工程用的模式语言，<strong>不适合直接迁移到组织设计</strong>（其 Bounded Context 是上下文窗口边界，不是组织边界；Shared Resource Pool 是向量库共享，不是人员池）。详见<a href="#e">附录 E · 报告生产的多智能体协作过程</a>。</p>
+</blockquote>
+<hr />
+<h1 id="_2" data-anchor="_2">第一部分 · 背景与诊断</h1>
+<h2 id="1-art" data-anchor="1-art">1. 当前 ART 的问题</h2>
+<p>Porsche CCP ART 目前的结构：
+- <strong>10 个 Scrum Team</strong>，每个 5-9 人
+- <strong>2-3 个 Value Stream</strong>
+- <strong>传统 SAFe 节奏</strong>：双周 Sprint，10 周 PI</p>
+<p><strong>核心痛点</strong>：
+1. <strong>前期反复对齐</strong>：PM 写 PRD → Dev 看不懂 → 开会 → 改 PRD → 再开会 → 开发 → QA → 返工。一个 Story 从想法到上线 4-6 周。
+2. <strong>角色割裂</strong>：BA/Dev/QA/UX 各管一段，交付物在不同系统流转（Jira/Confluence/Git/测试平台）。每个人都在"翻译"。
+3. <strong>AI 工具浅层使用</strong>：开发者用 Copilot 写代码，但流程没变，AI 只是更快地完成"原本就该做的事"，没有改变工作方式。
+4. <strong>管理层级冗余</strong>：SM 对齐进度，PM 对齐需求，TL 对齐技术——每一层都在消耗时间。</p>
+<h2 id="2-gdc" data-anchor="2-gdc">2. 德勤 GDC 的启示</h2>
+<p>2026-05-08 参访德勤重庆 GDC，观察到的核心实践：</p>
+<p><strong>BA-Pipeline + MetaForge 平台</strong>：
+- 业务分析 → AI 生成方案 → AI 生成代码 → AI 生成测试 → 部署
+- 一个完整流程的人员配置：<strong>3 个人</strong></p>
+<p><strong>Harness Master 多阶段质量治理</strong>：
+- 以 Big QA / SQA 思路设计端到端质量规则、过程护栏、Gate Control 与报告机制
+- 将规则嵌入 Agent 的 Blueprint、Hooks、Steering 与 Skill 中，让 AI 在执行中自检、留痕、触发升级
+- QA 角色从“测试执行者”升级为“质量治理者 / 过程护栏设计者”，QC、V&amp;V 与 Tester 型执行工作主要由 AI Agent 和自动化工具链承担</p>
+<p><strong>外部理论验证</strong>：</p>
+<p>《AI 软件工程范式革命》一文（参见<a href="#b">核心数据来源</a>）从工程史视角提出了与德勤观察高度一致的判断：</p>
+<ul>
+<li><strong>闭环优先 &gt; 单点替换</strong>：不要在 IDE 里只塞一个 Copilot，而要围绕“生成—验证—修复—沉淀规则”构造端到端 AI 产线。德勤的 BA-Pipeline + Harness Master 六阶段正是这一思路的落地实例。</li>
+<li><strong>确定性裁判是地基</strong>：编译器、类型系统、单元测试、CI/CD、灰度监控等过去五十年留下的自动化验证基础设施，是 AI 软件工程的地基。Harness Master 的 Quality Rules + Gate Control + Toolchain 三层与此直接对应。</li>
+<li><strong>场景驱动的隐性知识蒸馏</strong>：文章认为最难的一关是如何把专家隐性知识蒸馏出来——传统 Wiki、Confluence、流程文档的共同问题是“没有问题驱动，专家经验不会显化”。这与本框架的 Skill / Blueprint / 实践注册表设计目标一致：不是静态文档，而是“问题触发 → 规则沉淀 → Agent 复用”的闭环。</li>
+</ul>
+<blockquote>
+<p>该文章同时提醒我们：<strong>Copilot 模式不是终局，但也不是弯路</strong>——它是过渡形态、训练场和数据采集层。真正的问题不是“要不要 Copilot”，而是“是否停留在 Copilot 不再往闭环演进”。这与本框架三阶段渐进路线（Assistant → Augmented → Native）的判断一致。</p>
+</blockquote>
+<p><strong>未来三角色模型</strong>：
+1. <strong>AI Orchestrator</strong>：PO 在 AI 时代的拓展角色，负责需求理解、业务价值定义、Story 拆解、与利益相关者沟通
+2. <strong>AI Engineer</strong>：纯粹的实现工程师，负责 Agent/Skill 的技术配置和构建、Prompt 工程、AI 生成代码的质量把控
+3. <strong>Harness Master</strong>：SM 在 AI 时代的拓展角色——流程管理与质量治理双肩挑，负责交付节奏、流程护栏、质量原则、Guardrails、Gate Control、质量报告与对 Orchestrator 的过程约束</p>
+<h2 id="3" data-anchor="3">3. 设计原则的根本性转变</h2>
+<h3 id="31-vs">3.1 单点提效 vs 整体提效</h3>
+<blockquote>
+<p><strong>关键认知</strong>：原子小队（Squad）解决的是<strong>局部提效</strong>——单个交付单元的产出倍增。
+但<strong>整体提效</strong>——组织级的价值创造速度——的杠杆在 <strong>Value Stream / ART / Portfolio</strong> 三层。</p>
+<p>一支高效 Squad 困在低效的 ART 流程中，依然交付不了价值；
+30 支 Squad 没有 Portfolio 层的价值流对齐和资源调度，会变成 30 个孤岛。</p>
+</blockquote>
+<p><strong>四层提效模型</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│  📊 Portfolio 层  ← 战略提效（决定&quot;做什么最有价值&quot;）          │
+│  • 价值流投资组合管理                                         │
+│  • 战略主题与 OKR 对齐                                        │
+│  • 跨 VS 资源/预算/能力调度                                   │
+│  • Lean Budget &amp; Guardrails                                  │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  🚂 ART 层  ← 协同提效（决定&quot;如何同步多个 VS&quot;）              │
+│  • 跨 VS 依赖管理与同步                                       │
+│  • PI 规划与节奏管理                                          │
+│  • 共享平台与基础设施                                         │
+│  • 三人决策小组治理                                           │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  🌊 Value Stream 层  ← 流动提效（决定&quot;价值如何端到端流动&quot;）   │
+│  • 端到端价值流设计                                           │
+│  • 跨 Squad 协作模式                                          │
+│  • 业务结果度量（非活动度量）                                 │
+│  • VS 内部的优化闭环                                          │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  ⚡ Squad 层  ← 局部提效（决定&quot;单个 Story 多快交付&quot;）         │
+│  • 3 人 + N Agent 的人机混合                                  │
+│  • 短周期 Story 交付                                          │
+│  • Skill / Blueprint 沉淀                                     │
+│  • Dogfooding 正反馈                                          │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>每层的提效杠杆完全不同</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>提效公式</th>
+<th>主要风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Portfolio</strong></td>
+<td>价值/投入比 = ∑(战略对齐的VS产出) / ∑(预算)</td>
+<td>做错的事（再快也无意义）</td>
+</tr>
+<tr>
+<td><strong>ART</strong></td>
+<td>协同效率 = 1 / (跨 VS 等待时间 + 依赖阻塞)</td>
+<td>VS 之间互相阻塞</td>
+</tr>
+<tr>
+<td><strong>Value Stream</strong></td>
+<td>流动效率 = 价值时间 / 总周期时间（含等待）</td>
+<td>局部最优、全局次优</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>单元产出 = AI 杠杆 × 团队成熟度</td>
+<td>内卷但不出价值</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>核心警示</strong>：
+- <strong>只优化 Squad → 局部最优，全局可能更差</strong>（Squad 跑得快但 VS 卡在审批/依赖/对齐）
+- <strong>只优化 ART/Portfolio → 顶层好看，底层苦不堪言</strong>（PI 规划很顺但 Squad 无法落地）
+- <strong>四层同步优化 → 真正的组织级提效</strong></p>
+<p>本报告后续章节中：
+- <strong>第 4-5 章</strong>讲 Squad 层（局部提效）
+- <strong>第 6 章</strong>讲 VS / ART 层（流动与协同提效）
+- <strong>第 7 章新增</strong> Portfolio 层（战略提效）</p>
+<h3 id="32-vs">3.2 闭环优先 vs 单点替换 <span class="inline-badge core">Core</span> 内核</h3>
+<blockquote>
+<p><strong>关键认知</strong>：AI 原生交付不是“在每个现有节点上塞一个 AI 工具”，而是<strong>围绕“生成—验证—修复—沉淀规则”构造端到端闭环</strong>。</p>
+</blockquote>
+<p><strong>单点替换的陷阱</strong>：
+- 人需求 → 人设计 → AI 编码 → 人测试 → 人部署
+- AI 节点被人化接口切成孤岛，无法形成端到端 AI 主导流程
+- 形成“人 → AI → 人”的不确定性循环：AI 学习人类代码也学习人类错误，人 review 标准仍是旧标准</p>
+<p><strong>闭环优先的路径</strong>：
+1. <strong>先建立一条端到端封闭的 AI 全流程小回路</strong>（如德勤 BA-Pipeline 的 8 步 Harness）
+2. <strong>闭环内迭代</strong>：让 AI 在有限边界内自我纠偏，沉淀 Rules / Checklist / Gate
+3. <strong>逐步开放复杂边界</strong>：从形式化程度最高的节点开始（编码 + 测试 → 发布运维 → 系统设计 → 需求分析）
+4. <strong>闭环吞并</strong>：成熟闭环逐步吸收相邻节点，扩大自治范围</p>
+<p><strong>与本框架的对应</strong>：
+- Squad 层的 5 天交付周期就是一个<strong>微型闭环</strong>：需求理解 → AI 生成 → 自动验证 → 部署 → 复盘沉淀
+- Harness Master 的 Gate Control 是闭环内的<strong>确定性裁判</strong>
+- 实践注册表是闭环产出的<strong>规则资产化机制</strong></p>
+<h3 id="33-scrum-vs-squad">3.3 传统 Scrum vs 原子小队（Squad 层对比）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>传统 Scrum</th>
+<th>原子小队（AI 原生）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>团队规模</strong></td>
+<td>5-9 人</td>
+<td>3 人 + N Agent</td>
+</tr>
+<tr>
+<td><strong>核心活动</strong></td>
+<td>写代码、写测试、写文档</td>
+<td>编排 Agent、审 AI 产出、设计 Rules</td>
+</tr>
+<tr>
+<td><strong>价值创造</strong></td>
+<td>人工生产</td>
+<td>人机协作生产</td>
+</tr>
+<tr>
+<td><strong>流程+质量保障</strong></td>
+<td>QA/QC 后置测试 + SM 手动协调</td>
+<td>Harness Master 设计流程护栏+质量护栏，AI Agent 执行验证</td>
+</tr>
+<tr>
+<td><strong>知识沉淀</strong></td>
+<td>Confluence 文档</td>
+<td>Prompt + Skill + Blueprint</td>
+</tr>
+<tr>
+<td><strong>决策方式</strong></td>
+<td>多层对齐</td>
+<td>3 人自主决策</td>
+</tr>
+<tr>
+<td><strong>交付节奏</strong></td>
+<td>4-6 周一个 Story</td>
+<td>5 天一个 Story</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<blockquote>
+<p><span class="inline-badge warn">Risk</span> 这只是 <strong>Squad 层</strong>的对比，<strong>不代表整体提效</strong>。整体提效见 <a href="#6-art-vs-art">第 6 章 VS/ART 设计</a> 和 <a href="#7-portfolio">第 7 章 Portfolio 治理</a>。</p>
+</blockquote>
+<p><strong>关键定位转变</strong>：</p>
+<blockquote>
+<p><strong>从"降本"转为"增效不降本"</strong>——不裁员，让同样的人通过 AI 实现 3-5 倍产出。这是一个增长导向、而非成本导向的转型。</p>
+<p>但"3-5 倍产出"必须是 <strong>VS/ART/Portfolio 三层都打通</strong>之后的整体产出，而非 Squad 局部速度。否则只是把瓶颈从代码转移到流程。</p>
+</blockquote>
+<hr />
+<h1 id="_3" data-anchor="_3">第二部分 · 架构设计</h1>
+<blockquote>
+<p><strong>阅读说明</strong>：本部分包含两类内容——
+- <strong><span class="inline-badge core">Core</span> 内核（Core）</strong>：稳定不变的设计原则和角色定位
+- <strong><span class="inline-badge instance">Instance</span> 实例（Instance）</strong>：当前快照下的具体配置，会随技术演进被替换</p>
+<p>实例标注的所有数字（如"5 天"、"30 个"、"3-5 倍"）都是<strong>起步建议</strong>，不是规定。
+新实践通过<a href="#13">第 13 章 实践注册表</a>接入。</p>
+</blockquote>
+<h2 id="4-3-n-agent" data-anchor="4-3-n-agent">4. 原子小队：3人 + N Agent 的人机混合</h2>
+<h3 id="41">4.1 基本配置 <span class="inline-badge core">Core</span> 内核</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">原子小队 (Atomic Squad) = 3 个人类角色 + N 个 AI Agent
+
+┌─────────────────────────────────────────────────┐
+│           原子小队架构（内核）                    │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  👤 AI Orchestrator   (PO拓展 — 需求与价值)  │
+│  👤 AI Engineer       (实现工程师 — Agent/Skill) │
+│  👤 Harness Master       (SM拓展 — 流程+质量治理)  │
+│                                                  │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━     │
+│                                                  │
+│  🤖 N 个可插拔的 AI Agent                        │
+│     (按需求、技术能力、工具生态动态扩展)          │
+│                                                  │
+└─────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>内核要点</strong>：
+- 3 个人类角色的<strong>分工逻辑</strong>稳定（业务编排 / 技术执行 / 质量约束），具体职责范围可演化
+- N 是开放数字——可以是 3、10、50，取决于任务复杂度和 Agent 能力成熟度
+- "3 人 + N Agent"是结构原则，不是人头规定</p>
+<h3 id="42-agent-2026-q2">4.2 当前 Agent 池 <span class="inline-badge instance">Instance</span> 实例（2026 Q2 快照）</h3>
+<blockquote>
+<p>以下是<strong>当前技术条件下</strong>的典型 Agent 配置。新 Agent（如 Claude 4.X、新型 Coding Agent）随时可加入。</p>
+</blockquote>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">当前推荐的起步 Agent 池:
+  🤖 需求分析 Agent
+  🤖 代码生成 Agent
+  🤖 测试生成 Agent
+  🤖 代码审查 Agent
+  🤖 部署 Agent
+  🤖 文档生成 Agent
+  🤖 ... (按需扩展)
+
+预期演进方向（半年内可能新增）:
+  🤖 架构设计 Agent
+  🤖 数据迁移 Agent
+  🤖 性能优化 Agent
+  🤖 安全扫描 Agent
+  🤖 客户对话 Agent（接管部分 PO 沟通）
+</code></pre></div>
+<h3 id="43">4.3 交付节奏 <span class="inline-badge instance">Instance</span> 实例</h3>
+<blockquote>
+<p>起步建议：5 天 Story 周期。<strong>这不是规定</strong>——根据 Squad 成熟度和业务特点，可能是 3 天、7 天、甚至单日。</p>
+</blockquote>
+<p><strong>典型 5 天周期参考</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Day 1: 需求理解 + 拆解
+├─ AI Orchestrator 与利益相关者对齐
+├─ 需求分析 Agent 自动拆解 Story → Tasks
+└─ 3 人 30 分钟评审，定下技术方向
+
+Day 2-3: AI 生成 + 人类审查
+├─ 代码生成 Agent 产出代码
+├─ AI Engineer 审查关键逻辑
+├─ 测试生成 Agent 产出测试
+└─ Harness Master Rules 自动验证
+
+Day 4: 集成 + 质量门
+├─ 代码审查 Agent 扫描
+├─ Harness Master 多阶段质量门
+└─ 部署 Agent 准备上线
+
+Day 5: 上线 + 复盘
+├─ 部署 Agent 执行
+├─ 监控 Agent 跟踪
+└─ 3 人 30 分钟复盘，沉淀 Skill
+</code></pre></div>
+<p><strong>内核原则</strong>：
+- <strong>短周期 + 高频反馈</strong>（周期长度可变，但短反馈循环不变）
+- <strong>AI 生成在前，人类审查在后</strong>（具体比例可演化）
+- <strong>每周期必须沉淀可复用资产</strong>（Skill、Blueprint、Rules）</p>
+<h3 id="44-agent">4.4 与 Agent 的协作模式 <span class="inline-badge core">Core</span> 内核</h3>
+<blockquote>
+<p><strong>本节解决一个报告此前缺失的维度</strong>：三角色定义了"三个人类怎么分工"，但没定义"这三个人怎么跟 Agent 一起工作"，以及"Agent 之间怎么协作"。以下是原则和实操。</p>
+</blockquote>
+<h4 id="441-agent">4.4.1 核心原则：不要把 Agent 系统设计成一家公司</h4>
+<p>很多团队在设计 Agent 系统时，会自然采用一种模式：让一个 Agent 当 PM、一个当架构师、一个当开发、一个当测试，再让它们像公司部门一样顺序交接（俗称"三省六部"架构）。</p>
+<p><strong>这个模式在工程上是脆弱的</strong>。原因不是"多 Agent 不好"，而是它犯了三个关键错误：</p>
+<p><strong>错误 1：角色标签 ≠ 专业能力</strong></p>
+<p>同一个模型可以写 PRD、写代码、做测试分析。给它贴上"产品经理""测试工程师"的标签，不会让它拥有真正的专业能力——只会改变它的表达风格和注意力方向。真正的专业能力来自：<strong>工具、上下文、知识源、验证标准和权限边界</strong>。一个"测试 Agent"如果不能运行测试、不能读日志、不能对照验收标准，那它只是一个用测试口吻说话的文本生成器。</p>
+<p><strong>错误 2：顺序交接导致上下文衰减</strong></p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">PM Agent ──摘要──→ Dev Agent ──摘要──→ QA Agent
+上下文: 100%      上下文: ~40%       上下文: ~20%
+设计推理全丢      设计意图丢失        只剩碎片
+</code></pre></div>
+<p>每次交接，传递过去的只是"结论"而非完整推理。用户的原始意图、需求背后的假设、方案取舍过程、被放弃的备选项、隐含约束——这些全部丢失。链路越长，偏移越大。最终可能出现一种危险状态：<strong>每一步局部看都合理，但整体已经偏离了最初要解决的问题。</strong></p>
+<p>Anthropic 在 "Building Effective Agents" 中明确建议使用简单、可组合的任务驱动模式（prompt chaining、routing、parallelization、orchestrator-workers、evaluator-optimizer），而非复杂的角色框架。ChatDev（ACL 2024）论文的实证数据也表明，角色化流水线的 Quality 得分仅 0.3953（0-1 量表），远未达到生产可用。</p>
+<p><strong>错误 3：预设步骤让 Agent 表演剧本而非推理问题</strong></p>
+<p>报告 §9.4 Pattern 6（去预设化指令）已指出：<em>"Long instructions, staged checklists usually backfire: the model pattern-matches your scaffolding instead of reasoning."</em> 角色化编排是最高级别的"预设化指令"——不仅预设了步骤（需求→设计→编码→测试），还预设了每个步骤的"角色"。Agent 不再推理代码，而是在角色剧本里表演。</p>
+<h4 id="442-agent">4.4.2 正确的 Agent 编排原则 <span class="inline-badge core">Core</span> 内核</h4>
+<p><strong>原则一：一个主 Agent 持有完整意图</strong></p>
+<p>主 Agent 负责理解目标、维护上下文、分解任务、调度工具和子 Agent、合并结果、对最终输出负责。责任不能分散在多个角色之间消失。</p>
+<p><strong>原则二：子 Agent 是能力模块，不是部门员工</strong></p>
+<p>不要定义"你是 PM Agent / 你是测试 Agent"。要定义：</p>
+<blockquote>
+<p>需求澄清器：识别目标、边界、验收标准
+技术审查器：检查方案风险、依赖和复杂度
+测试生成器：根据验收标准生成测试用例
+执行器：在受控环境中修改代码并运行验证</p>
+</blockquote>
+<p>重点不是角色名，而是：输入是什么、输出是什么、能用什么工具、不能做什么、成功标准是什么、如何验证。</p>
+<p><strong>原则三：所有关键状态必须外化</strong></p>
+<p>至少维护这些持久化文件：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">/spec.md           # 目标、范围、非目标、验收标准
+/plan.md           # 阶段计划、依赖、检查点
+/decision-log.md   # 关键决策、原因、备选方案
+/progress.md       # 当前进展、完成项、阻塞项、下一步
+/test-log.md       # 验证记录、失败记录、修复记录
+</code></pre></div>
+<p>不要依赖"模型应该记得"。聊天记录不是可靠的工程状态。可靠的是显式、结构化、可审计的外部状态。</p>
+<p><strong>原则四：交接必须传证据，不只传结论</strong></p>
+<p>子 Agent 返回结果时，应包含：推荐方案 + 证据 + 假设 + 被放弃的备选方案 + 风险 + 验证方式 + 仍未解决的问题。这能显著降低后续 Agent 的误解概率。</p>
+<p><strong>原则五：验证 Agent 应该挑战，而不是接棒</strong></p>
+<p>验证 Agent 不应只是"读开发 Agent 的输出然后写测试报告"。它应独立对照原始需求、验收标准、代码变更、边界条件、日志和测试结果。它的任务不是配合，而是质疑。</p>
+<h4 id="443-agent">4.4.3 过渡期的 Agent 协作演化 <span class="inline-badge instance">Instance</span> 实例</h4>
+<blockquote>
+<p>上述原则（主 Agent + 能力模块 + 状态外化）是 <strong>AI Native 终态</strong>的协作模式。在达到终态之前，团队需要经历三个阶段的 Agent 协作方式演化。以下是对齐到项目计划时间线的实操方案。</p>
+</blockquote>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│  Phase 0: 个人 Agent (PI 18-19, AI 15%→40%)                │
+│  • 每个人在自己的角色内独立使用 AI 工具                       │
+│  • PO 用 AI 拆需求 | Dev 用 AI 做 Code Review                │
+│  • 重要：SM 开始建&quot;Agent 使用台账&quot;——记录谁用什么 Agent        │
+│    做了什么、效果如何                                        │
+│  • Agent 协作模式：无──每个人和自己的 Agent 1:1               │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 1: 共享 Agent (PI 20-21, AI 40%→60%)                │
+│  • 团队开始共享同一份 feature_list.json 和 /spec.md           │
+│  • Dev 和 QA 开始用同一个 Agent 实例（而非各自的 Agent）      │
+│  • 开始试行 Mob Coding 节奏（Driver 轮换，见 §4.4.4）         │
+│  • 关键信号：Feature Checklist 成为团队和 Agent 之间的         │
+│    共享语言，不再有人&quot;翻译&quot;需求                               │
+├─────────────────────────────────────────────────────────────┤
+│  Phase 2: 团队 Agent (PI 22-23, AI 60%→85%)                │
+│  • 完整 Mob Coding：单一 Agent 作为第四成员                    │
+│  • 状态文件（spec/plan/decision-log/progress/test-log）       │
+│    全部外化，Agent 和人类共享同一套状态                        │
+│  • 子 Agent 按需调用（并行探索、对抗审查），但主 Agent 持有     │
+│    完整意图和状态                                            │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>Phase 0 的关键动作</strong>：
+- SM 建台账、观察 Agent 使用模式、识别"哪些角色之间在互相翻译需求"——这些就是未来角色合并的切入点
+- 每个人建立自己的 Prompt/Skill 库
+- 不做角色合并，不做 Agent 共享</p>
+<p><strong>Phase 1 的准入条件</strong>：
+- 每个角色都有 AI 工具在日常使用（100% 覆盖）
+- AI 使用率 ≥40%
+- Feature Checklist 已成为团队的共享工件
+- SM 台账显示 ≥3 个"角色翻译浪费"的案例</p>
+<p><strong>Phase 2 的准入条件</strong>：
+- 至少 1 个准原子 Squad 已在 Phase 1 验证了 Mob Coding 节奏
+- 状态外化文件（spec/plan/decision-log/progress/test-log）已成为团队日常
+- 团队成员不再说"我的 Agent"，而说"我们的 Agent"</p>
+<h4 id="444-mob-codingai-native">4.4.4 Mob Coding：AI Native 阶段的日常工作模式 <span class="inline-badge instance">Instance</span> 实例</h4>
+<p>在 Phase 2（AI Native），三人原子团队采用 <strong>Mob Coding</strong> 模式——三个人轮流驱动<strong>同一个 Agent</strong>，Agent 作为第四团队成员持续在场。</p>
+<p><strong>驾驶轮换规则</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>Driver</th>
+<th>Solution Lead (Nav)</th>
+<th>AI Engineer (Nav)</th>
+<th>Harness Master (Nav)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>需求拆解</strong></td>
+<td>Solution Lead</td>
+<td>—</td>
+<td>技术可行性</td>
+<td>验收标准完整性</td>
+</tr>
+<tr>
+<td><strong>实现</strong></td>
+<td>AI Engineer</td>
+<td>业务意图校准</td>
+<td>—</td>
+<td>质量规则触发</td>
+</tr>
+<tr>
+<td><strong>质量验证</strong></td>
+<td>Harness Master</td>
+<td>价值确认</td>
+<td>技术审查</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>复盘沉淀</strong></td>
+<td>轮流</td>
+<td>轮流</td>
+<td>轮流</td>
+<td>轮流</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>Navigator 规则</strong>：发现问题时先记录到 parking lot（共享文档），不打断 Driver 与 Agent 的对话。Driver 完成当前交互后再处理 parking lot——这避免了"七嘴八舌打断 Agent 上下文"。</p>
+</blockquote>
+<p><strong>典型一天的 Mob Coding 节奏</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">09:30  Mob Standup (5 min)
+       └─ 三人 + Agent 一起看 feature_list.json，选今天 1 个 Story
+
+09:35  Solution Lead 做 Driver (20-30 min)
+       └─ &quot;Agent，这是今天的 Story，帮我细化验收标准，追问边界条件&quot;
+       └─ AI Engineer (Nav)：parking lot 记&quot;需要先做数据迁移&quot;
+       └─ Harness Master (Nav)：parking lot 记&quot;补充空数据场景&quot;
+
+10:00  AI Engineer 做 Driver (60-90 min)
+       └─ &quot;Agent，基于验收标准开始实现&quot;
+       └─ Solution Lead (Nav)：&quot;这个交互和用户预期不一致&quot;→ parking lot
+       └─ Harness Master (Nav)：&quot;覆盖率不能低于上次基线&quot;→ parking lot
+
+11:30  Agent 自主运行 (30 min)
+       └─ 三人可短暂离场或处理 parking lot
+       └─ Agent 自己跑端到端验证（Pattern 10）
+
+14:00  Harness Master 做 Driver (30-45 min)
+       └─ &quot;Agent，跑完整端到端验证。有失败按 Pattern 12 自己修，3 次上限&quot;
+
+15:00  三人 Code Review + parking lot 清理 (20 min)
+
+16:00  Harness Master 做 Driver (15 min) — 清洁交接
+       └─ git commit + 更新 feature_list + progress note
+</code></pre></div>
+<p><strong>什么时候不适用 Mob Coding</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>替代方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>两个完全独立的 Story 可并行</td>
+<td>分叉——AI Engineer 独立驱动 Agent 做 Story A，Solution Lead 用 Agent 做 Story B 需求分析</td>
+</tr>
+<tr>
+<td>Agent 跑长任务（部署、大规模测试）</td>
+<td>Agent 后台运行，三人处理 parking lot 或 Skill 沉淀</td>
+</tr>
+<tr>
+<td>简单确定性任务（格式化、依赖更新）</td>
+<td>AI Engineer 直接指令，不需要 Mob</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="5" data-anchor="5">5. 三角色定位 <span class="inline-badge core">Core</span> 内核</h2>
+<blockquote>
+<p>三角色的<strong>分工逻辑</strong>是框架内核——需求与价值、技术实现、质量治理的三元结构。
+各角色的具体能力构成和典型工作流是<strong>当前实例</strong>，随工具演进会变化。</p>
+<p><strong>关键澄清</strong>：三角色不是凭空新造，而是<strong>PO、Dev、SM 铁三角在 AI 时代的极简版</strong>。</p>
+<p>传统 Scrum 的基本细胞是 PO（定义方向）+ Dev（实现）+ SM（保障流程）。AI 原生交付中，这个铁三角的职责被重新分配：
+- <strong>PO</strong> → AI Orchestrator：需求与价值定义不变，工具从文档/会议升级为 Agent 编排
+- <strong>Dev</strong> → AI Engineer：工程实现不变，方式从手写代码升级为 Agent/Skill 构建
+- <strong>SM</strong> → Harness Master：流程保障不变，范围从“移除人的障碍”扩展到“移除 Agent 的障碍 + 质量护栏双肩挑”</p>
+<p>技能基底依然来自 PO、Dev、SM/QA 三类专业人员，只是工作方式被 AI 放大，职责边界被重塑。</p>
+</blockquote>
+<h3 id="51-ai-orchestratorpo-ai">5.1 AI Orchestrator（PO 的 AI 拓展）</h3>
+<p><strong><span class="inline-badge core">Core</span> 角色本质（内核）</strong>：</p>
+<blockquote>
+<p>AI Orchestrator 是 PO（Product Owner）在 AI 时代的拓展，<strong>不是新造一个"AI 编排官"</strong>。
+其根本依然是"理解业务、定义价值、对齐需求"，但工具从文档/会议升级为 Agent 编排。</p>
+</blockquote>
+<p><strong><span class="inline-badge core">Core</span> 核心职责（内核）</strong>：
+- 业务理解与利益相关者沟通（PO 的根本能力）
+- 需求拆解、用户故事编写、验收标准定义
+- 用 AI Agent 加速需求分析、原型生成、用户访谈整理
+- 编排 Agent 流程，让需求快速转化为可验证产物
+- 价值优先级判断、Sprint Backlog 决策</p>
+<p><strong><span class="inline-badge instance">Instance</span> 能力模型（当前实例）</strong>：
+- 70% 业务/产品/需求能力 / 20% AI 工具使用 / 10% 基础技术理解
+- <strong>来源</strong>：现有的 PO、产品经理、BA、需求分析师
+- <strong>不需要</strong>：成为技术专家，但需要能用 AI 编排流程
+- 类比：从"写 PRD 的产品经理"升级为"用 AI 把需求快速变成可验证原型的产品经理"</p>
+<p><strong><span class="inline-badge instance">Instance</span> 典型一天（当前实例）</strong>：
+- 9:00-9:30：与利益相关者对齐当周优先级
+- 9:30-12:00：用 AI 拆解需求 → 生成用户故事 → 评审验收标准
+- 14:00-16:00：审查 AI 产出的需求分析、原型、设计文档
+- 16:00-17:00：与 Stakeholder 演示进展、收集反馈</p>
+<h3 id="52-ai-engineer">5.2 AI Engineer（实现工程师）</h3>
+<p><strong><span class="inline-badge core">Core</span> 角色本质（内核）</strong>：</p>
+<blockquote>
+<p>AI Engineer 是<strong>纯粹聚焦于实现的工程师</strong>——做 Agent 配置、Skill 构建、Prompt 工程、工具集成。
+不是"懂AI的资深架构师"，而是"用 AI 工具高效构建系统的实现者"。</p>
+</blockquote>
+<p><strong><span class="inline-badge core">Core</span> 核心职责（内核）</strong>：
+- Agent 的设计、配置、调试与优化
+- Skill 模块的构建与复用
+- Prompt 工程、Tool 集成、模型/工具选型
+- AI 生成代码的审查、重构、质量把控
+- 技术债务与重构</p>
+<p><strong><span class="inline-badge instance">Instance</span> 能力模型（当前实例）</strong>：
+- 70% 工程实现能力 / 20% AI/Prompt 工程 / 10% 系统集成
+- <strong>来源</strong>：现有的 Dev、全栈工程师
+- <strong>不需要</strong>：做模型研究、不需要懂深度学习理论
+- 类比：从"自己写每一行代码的开发"升级为"用 AI 高效构建可靠系统的实现工程师"</p>
+<p><strong><span class="inline-badge instance">Instance</span> 典型一天（当前实例）</strong>：
+- 9:30-12:00：配置/调试 Agent，优化 Prompt 和 Tool
+- 14:00-16:00：审查 AI 生成的代码，重构关键模块
+- 16:00-17:30：构建/迭代可复用 Skill，集成新工具</p>
+<h3 id="53-harness-master-sm-ai">5.3 Harness Master（流程+质量治理 / SM 的 AI 拓展）</h3>
+<p><strong><span class="inline-badge core">Core</span> 角色本质（内核）</strong>：</p>
+<blockquote>
+<p>Harness Master 是 <strong>SM（Scrum Master）在 AI 时代的拓展角色</strong>——核心不是“更会排 Jira 看板的人”，而是<strong>流程管理者 + 质量治理者双肩挑</strong>。</p>
+<p>在传统 Scrum 中，SM 负责流程顺畅、移除障碍、引导团队持续改进；QA/SQA 负责质量体系、测试策略、缺陷预防。在 AI 原生交付中，这两条线的边界被 AI 消解了——
+- <strong>流程障碍</strong>不再是“人找不到人或等审批”，而是“Agent 之间的交接断裂、上下文丢失、工具链卡住”
+- <strong>质量问题</strong>不再是“测试没覆盖”，而是“Agent 产出验证不足、Gate 规则过时、技能沉淀失效”</p>
+<p>Harness Master 同时看管<strong>流动效率</strong>（Flow）和<strong>质量结果</strong>（Quality）——流程让价值快速流动，质量让流动的结果可信任。这也是为什么这个角色不能叫“SM”（与 Value Stream Lead 的角色层级冲突），也不能叫“QA”（窄化了流程管理的职责）。</p>
+</blockquote>
+<p><strong>Harness Master 的双重职责</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>流程管理（SM 的进化）</th>
+<th>质量治理（QA/SQA 的进化）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>关注点</strong></td>
+<td>Squad 的交付节奏是否顺畅？障碍是否被移除？</td>
+<td>Agent 产出是否达标？质量门是否有效？</td>
+</tr>
+<tr>
+<td><strong>主要问题</strong></td>
+<td>流程是否让正确结果稳定发生？</td>
+<td>产物是否通过验证且有追溯？</td>
+</tr>
+<tr>
+<td><strong>AI 时代变化</strong></td>
+<td>流程障碍从“人等人”变成“Agent-Agent 交接断裂”——需要设计 Agent 间协作护栏</td>
+<td>QC/V&amp;V 型执行由 AI Agent 承担——人转向原则定义、门禁设计、异常升级判断</td>
+</tr>
+<tr>
+<td><strong>典型动作</strong></td>
+<td>维护 Feature Checklist 进度、确保每日清洁交接、发现流程反模式、组织复盘</td>
+<td>设计 Quality Rules + Gate Control + Toolchain、维护三类裁判系统、Risk Left Shift</td>
+</tr>
+<tr>
+<td><strong>类比</strong></td>
+<td>流程教练 + 交付管家</td>
+<td>质量 PMO + 护栏设计师</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><span class="inline-badge core">Core</span> 核心职责（内核）</strong>：</p>
+<p><strong>流程管理</strong>：
+- 维护 Squad 的交付节奏（5 天周期），确保 Day 1 初始化 → Day 2-5 增量执行的节奏不被打破
+- 确保每周期清洁交接（git commit + progress note），让任何人/Agent 接手时能 5 分钟恢复上下文
+- 识别并移除流程障碍——无论是“人等审批”还是“Agent 上下文丢失”
+- 组织每周期复盘，推动从“这次出问题了”到“Skill/Blueprint 更新防止下次再出”的闭环
+- 维护 Feature Checklist 的完整性和真实性——“Done”必须是端到端验证通过的，不能自欺欺人
+- 管理外部依赖——当 Squad 需要 VS 内其他 Squad 或平台团队的配合时，主动对接消除阻塞</p>
+<p><strong>质量治理</strong>：
+- 设计端到端质量治理体系：Quality Rules、Gate Control、Toolchain、Reporting
+- 将 Guardrails 写入 Agent Blueprint、Hooks、Steering 与 Skill，约束 AI Orchestrator 和 AI Engineer 的工作边界
+- 定义每个阶段的 Checklist / Gate / Review，决定哪些门禁必须通过，哪些审查可以按风险触发
+- 维护过程合规、审计留痕、追溯链路与质量报告
+- 识别系统性质量风险和流程反模式，推动 Smart Review、Risk Left Shift 与资产沉淀</p>
+<p><strong>三类裁判系统（流程+质量的理论基础）</strong>：</p>
+<p>Harness Master 设计的质量门不是单一维度，而是分层递阶的三类裁判协同：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>典型机制</th>
+<th>作用</th>
+<th>在 Harness 中的对应</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>确定性裁判</strong></td>
+<td>编译器、类型系统、单元测试、契约校验、lint、ArchUnit、SpotBugs</td>
+<td>判断硬错误——通过/不通过</td>
+<td><strong>Toolchain</strong> + <strong>Gate Control</strong></td>
+</tr>
+<tr>
+<td><strong>统计性裁判</strong></td>
+<td>监控指标、A/B 测试、异常率、性能趋势、周期时间、流动效率、用户行为数据</td>
+<td>判断运行质量+流程健康度——趋势/异常</td>
+<td><strong>Reporting</strong> + <strong>Quality Dashboard</strong></td>
+</tr>
+<tr>
+<td><strong>专家性裁判</strong></td>
+<td>架构评审、价值取舍、风险接受、伦理判断、业务意图校准</td>
+<td>判断复杂权衡——需人介入</td>
+<td><strong>Review</strong>（按风险触发）+ <strong>人工升级</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>关键原则</strong>：
+- 确定性裁判应尽可能自动化，成为 AI Agent 的默认行为
+- 统计性裁判需要 Harness Master 设计监控基线和异常阈值（<strong>同时覆盖质量指标和流程指标</strong>）
+- 专家性裁判保留给人的判断力，Harness Master 决定何时触发人工介入
+- 不能把所有判断都交给确定性裁判——需求是否有价值、架构是否长期可维护、流程瓶颈是否已消除、异常场景是否遗漏，这些没有简单的通过/不通过标准</p>
+<p><strong><span class="inline-badge instance">Instance</span> 能力模型（当前实例）</strong>：
+- 30% 流程管理与敏捷教练能力 / 25% SQA / 质量体系 / 合规治理 / 20% 测试工程与质量风险经验 / 15% AI 工具与自动化理解 / 10% 技术基础（能看代码、能读 Agent 日志）
+- <strong>来源</strong>：现有 SM、敏捷教练、QA Lead、质量工程师、SQA、测试架构师、具备流程治理经验的 Dev Lead
+- <strong>不等同于</strong>：手动测试执行者、纯粹的流程协调员、或传统“只排看板不碰质量”的 SM
+- 关键能力跃迁：从“确保 Sprint 顺利”升级为“确保 Squad 的 AI 交付系统稳定地产出高质量结果”——同时看管流动和质量两条线</p>
+<p><strong><span class="inline-badge instance">Instance</span> 典型一天（当前实例）</strong>：
+- 9:30-10:00：检查昨日交付节奏——周期时间是否偏离基线？Agent 交接是否有断裂？Feature Checklist 推进是否正常？
+- 10:00-11:00：审查 Agent 执行报告、Gate 通过率、异常升级记录和追溯链路；识别流程反模式（如“连续 3 个 Story 在 Day 4 才发现问题”）
+- 11:00-12:00：与 AI Orchestrator 同步需求优先级和外部依赖阻塞，与 AI Engineer 同步技术障碍
+- 14:00-15:30：更新质量规则、流程护栏、交接模板；设计新的 Gate 或 Checklist 应对新发现的风险
+- 15:30-17:00：沉淀可复用资产——Checklist、Gate、Review 模板、复盘记录；推动跨 Squad 复用</p>
+<h2 id="6-art-vs-art" data-anchor="6-art-vs-art">6. ART 整体架构（VS / ART 层 — 流动与协同提效）</h2>
+<blockquote>
+<p><strong><span class="inline-badge core">Core</span> 内核</strong>：分层结构（ART → VS → Squad → Agent）+ 决策小组治理 + 共享平台 + 端到端价值流
+<strong><span class="inline-badge instance">Instance</span> 实例</strong>：本章所有具体数字均为<strong>当前组织规模下的参考配置</strong>，需根据实际情况调整。</p>
+<p>本章的重点不是"如何拆 Squad"，而是 <strong>VS 和 ART 这两层如何把 N 个 Squad 的局部提效转化为组织级整体提效</strong>。</p>
+</blockquote>
+<h3 id="60">6.0 整体提效的两大杠杆</h3>
+<p><strong>杠杆 1：流动效率（Value Stream 层）</strong>
+- 衡量：价值时间 / 总周期时间（含等待、依赖、审批）
+- 优化方向：<strong>消灭等待</strong>——一个 Story 从想法到上线，有多少时间在"动"，多少时间在"等"
+- 典型问题：Squad 5 天写完代码，但上线要等 3 周（其他 VS 的审批/集成测试/合规审查）</p>
+<p><strong>杠杆 2：协同效率（ART 层）</strong>
+- 衡量：1 / (跨 VS 等待时间 + 依赖阻塞次数)
+- 优化方向：<strong>消灭依赖</strong>——VS 间应该高内聚低耦合，不应互相阻塞
+- 典型问题：30 个 Squad 都依赖同一个平台团队，平台成为全组织瓶颈</p>
+<h3 id="61-team-atomic-squadsquad">6.1 从传统 Team 到 Atomic Squad（Squad 拆分） <span class="inline-badge instance">Instance</span> 实例</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">当前 ART 实例 (10 Scrum Teams，~70 人)
+├─ Team A (8人) ──┐
+├─ Team B (7人)   │
+├─ ...            ├─ 共 ~70 人
+└─ Team J (6人) ──┘
+
+           ↓ 重组（人数不变 — 增效不降本）
+
+目标 ART 实例 (~30 Atomic Squads + 专家池)
+├─ Squad 1 (3人 + N Agent) ──┐
+├─ Squad 2 (3人 + N Agent)   │
+├─ ...                        ├─ 共 ~70 人
+└─ Squad N (3人 + N Agent) ──┘  (N × 3 + 专家池 = 总人数)
+</code></pre></div>
+<p><strong>内核原则（不变）</strong>：
+- Team → Squad 的拆分比例由"业务可拆解性 + AI 自动化程度"决定
+- 总人数保持不变（增效不降本是硬约束）
+- Squad 数量是结果而非目标</p>
+<h3 id="62-value-stream">6.2 Value Stream 重组（流动提效核心） <span class="inline-badge core">Core</span> 内核 + <span class="inline-badge instance">Instance</span> 实例</h3>
+<h4 id="621-vs">6.2.1 VS 设计的内核原则 <span class="inline-badge core">Core</span></h4>
+<p><strong>端到端价值流（End-to-End Value Stream）</strong>：
+- 每个 VS 应该是<strong>完整的端到端价值交付路径</strong>——从客户需求到客户价值实现
+- VS 内部高内聚（包含从需求到运维的全链路）
+- VS 之间低耦合（最小化跨 VS 依赖）</p>
+<p><strong>业务结果度量，非活动度量</strong>：
+- ❌ "VS 本月交付了多少 Story"（活动度量，没意义）
+- <span class="inline-badge ok">OK</span> "VS 本月给客户/业务带来了多少价值"（如 NPS 提升、转化率提升、成本下降）</p>
+<p><strong>Value Stream 自治原则</strong>：
+- VS 内的 Squad 应能在 VS 内部自主决策、自主交付，不依赖外部审批
+- VS 有自己的目标（OKR）、自己的预算、自己的优先级</p>
+<h4 id="622-vs">6.2.2 当前 VS 重组示例 <span class="inline-badge instance">Instance</span></h4>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">当前 Value Stream (示例)         重组后 Value Stream (示例)
+─────────────────────           ─────────────────────
+VS1 - 客户体验  ────────→       VS1.1 - 移动端
+                                  VS1.2 - 桌面端
+                                  VS1.3 - 微信生态
+
+VS2 - 渠道  ────────→           VS2.1 - 经销商门户
+                                  VS2.2 - 服务工单
+                                  VS2.3 - CDP
+
+VS3 - 数据  ────────→           VS3.1 - BI 平台
+                                  VS3.2 - 数据治理
+                                  VS3.3 - AI/ML 平台
+                                  VS3.4 - 实时数据
+</code></pre></div>
+<h4 id="623-vs">6.2.3 VS 层的提效机制 <span class="inline-badge core">Core</span> 内核</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>机制</th>
+<th>目的</th>
+<th>实现方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VS 端到端度量</strong></td>
+<td>让 VS 关注流动效率而非活动量</td>
+<td>Lead Time、Cycle Time、Flow Efficiency 三个核心指标</td>
+</tr>
+<tr>
+<td><strong>VS 内部 Backlog 自治</strong></td>
+<td>让 VS 不必为优先级层层审批</td>
+<td>VS Lead + 业务方共同维护 Backlog，Portfolio 只设战略边界</td>
+</tr>
+<tr>
+<td><strong>VS 间接口契约化</strong></td>
+<td>减少跨 VS 沟通成本</td>
+<td>VS 之间通过 API/事件/数据契约协作，非临时对齐</td>
+</tr>
+<tr>
+<td><strong>价值假设快速验证</strong></td>
+<td>避免做错的事</td>
+<td>每个 Epic 启动前明确"价值假设"，2 周内做最小验证</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="624-vs-lead">6.2.4 VS Lead 角色定位 <span class="inline-badge core">Core</span> 内核</h4>
+<blockquote>
+<p>VS Lead 不是"老 PM"或"老 TL"的换皮，而是<strong>端到端价值流的负责人</strong>。</p>
+</blockquote>
+<p><strong>核心职责</strong>：
+- 对 VS 的业务结果负责（不是对活动量负责）
+- 管理 VS 内 Squad 间的协同（消除内部阻塞）
+- 对外管理 VS 间依赖（与其他 VS Lead 直接对接）
+- 维护 VS Backlog 与价值假设</p>
+<h3 id="63-art">6.3 ART 治理结构（协同提效核心） <span class="inline-badge core">Core</span> 内核</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌────────────────────────────────────────────────────────┐
+│      📊 Portfolio 层 (详见第 7 章)                       │
+└────────────────────────────────────────────────────────┘
+                            ↓
+┌────────────────────────────────────────────────────────┐
+│      🚂 ART 三人决策小组                                  │
+│  ──────────────────────────────────────────────         │
+│  • Portfolio Head（战略对齐 + 价值优先级）              │
+│  • RTE（流程节奏 + 跨 VS 同步）                          │
+│  • Enterprise AI（AI 战略 + 共享平台演进）              │
+│  ──────────────────────────────────────────────         │
+│  决策机制：                                              │
+│  - 双周节奏会议（30 分钟）                               │
+│  - 决策记录公开可见                                      │
+│  - 不做 Squad 内部决策（Squad 自主）                     │
+└────────────────────────────────────────────────────────┘
+                            ↓
+┌────────────────────────────────────────────────────────┐
+│      🌊 N 个 Value Stream Lead                          │
+│  ──────────────────────────────────────────────         │
+│  • 每个 VS 一位 Lead                                     │
+│  • VS Lead 之间直接对接，无需经决策小组中转              │
+│  • 月度跨 VS 同步会议（消除依赖）                        │
+└────────────────────────────────────────────────────────┘
+                            ↓
+┌────────────────────────────────────────────────────────┐
+│      ⚡ M 个原子小队 (3人 + N Agent)                     │
+│  ──────────────────────────────────────────────         │
+│  + 专家池（按需配置）                                    │
+│  + 共享平台团队（见 6.5）                                │
+└────────────────────────────────────────────────────────┘
+
+🔁 SM 角色转型 → Change Agent
+├─ 不再负责单个 Team 的流程
+├─ 跨 Squad / 跨 VS 推动变革落地
+├─ 收集和分发最佳实践
+└─ 与三人决策小组对接
+</code></pre></div>
+<h3 id="64-art">6.4 ART 层的提效机制 <span class="inline-badge core">Core</span> 内核</h3>
+<p>ART 层不是"上一层管理"，而是<strong>让多个 VS 高效协同的协调机制</strong>。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>机制</th>
+<th>目的</th>
+<th>实现方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PI 规划升级版</strong></td>
+<td>让 N 个 VS 在同一个节奏下对齐</td>
+<td>2 天 PI 规划 → 缩短为 1 天 + AI 辅助依赖识别</td>
+</tr>
+<tr>
+<td><strong>跨 VS 依赖管理</strong></td>
+<td>消除 VS 间阻塞</td>
+<td>依赖矩阵公开可见，VS Lead 直接协商，AI 自动识别新增依赖</td>
+</tr>
+<tr>
+<td><strong>共享平台与基础设施</strong></td>
+<td>避免重复造轮子</td>
+<td>平台团队提供 Agent 基础设施、CI/CD、监控、数据总线</td>
+</tr>
+<tr>
+<td><strong>快速决策通道</strong></td>
+<td>避免决策成为瓶颈</td>
+<td>三人小组双周会议 + 异步决策机制（48h 内必有结论）</td>
+</tr>
+<tr>
+<td><strong>跨 VS Skill 流动</strong></td>
+<td>让单个 VS 的经验扩散到全 ART</td>
+<td>Skill 注册表跨 VS 共享，定期跨 VS 演示</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="65-platform-team">6.5 共享平台（Platform Team） <span class="inline-badge core">Core</span> 内核</h3>
+<blockquote>
+<p>Squad 不应自己搭建 Agent 基础设施、CI/CD、监控、数据平台——这些应由<strong>共享平台团队</strong>提供。</p>
+</blockquote>
+<p><strong>平台团队的本质</strong>：把"组织级提效工具"做成产品，让所有 Squad / VS 都能消费。</p>
+<p><strong><span class="inline-badge instance">Instance</span> 当前平台组成（实例）</strong>：
+- <strong>AI Platform</strong>：Agent 基础设施、模型服务、Prompt 库、Skill 注册表
+- <strong>DevOps Platform</strong>：CI/CD、自动化部署、监控告警
+- <strong>Data Platform</strong>：数据总线、ETL、特征工程
+- <strong>Security Platform</strong>：身份、密钥、合规扫描</p>
+<p><strong>平台团队自己也是 Squad 结构</strong>（3 人 + N Agent），但服务对象是其他 Squad 而非业务方。</p>
+<h3 id="66-expert-pool">6.6 专家池（Expert Pool） <span class="inline-badge core">Core</span> 内核</h3>
+<p><strong><span class="inline-badge core">Core</span> 功能</strong>：提供共享专业能力，避免每个 Squad 都配齐所有专家。</p>
+<p><strong><span class="inline-badge instance">Instance</span> 典型组成（当前实例）</strong>：
+- UX Designers：跨 Squad 设计支持
+- Security/Compliance Specialists：安全/合规审查
+- Data Engineers：数据管道
+- Domain Experts：业务领域专家
+- AI Architects：跨 Squad 的 AI 架构指导</p>
+<p><strong><span class="inline-badge core">Core</span> 协作模式</strong>：嵌入式（Embedded），不是工单式（Ticket-based）。专家进入 Squad 工作一段时间，然后回池。具体周期可由 Squad 协商。</p>
+<h3 id="67-vs-art">6.7 VS / ART 层提效的反模式 <span class="inline-badge warn">Risk</span></h3>
+<p>以下是常见错误，需明确避免：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>反模式</th>
+<th>表现</th>
+<th>后果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>微观管理</strong></td>
+<td>三人决策小组干预 Squad 内部决策</td>
+<td>Squad 失去自主性，提效失败</td>
+</tr>
+<tr>
+<td><strong>VS 假自治</strong></td>
+<td>名义上 VS 自治，实际所有决策仍需上级批</td>
+<td>VS Lead 变成传声筒</td>
+</tr>
+<tr>
+<td><strong>活动度量</strong></td>
+<td>用 Story 数、代码行数衡量 VS</td>
+<td>鼓励内卷而非价值</td>
+</tr>
+<tr>
+<td><strong>跨 VS 频繁开会</strong></td>
+<td>用会议解决依赖</td>
+<td>协作成本爆炸</td>
+</tr>
+<tr>
+<td><strong>平台后置</strong></td>
+<td>让 Squad 自己搭基础设施</td>
+<td>重复造轮子，N 个 Squad N 套工具</td>
+</tr>
+<tr>
+<td><strong>临时对齐文化</strong></td>
+<td>每次跨 VS 协作都要"对齐一下"</td>
+<td>接口契约缺失，依赖于人</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="7-portfolio" data-anchor="7-portfolio">7. Portfolio 层（战略提效与价值流投资组合）</h2>
+<blockquote>
+<p><strong><span class="inline-badge core">Core</span> 内核</strong>：Portfolio 是组织级提效的<strong>最高杠杆点</strong>——决定"做什么最有价值"。
+ART 层解决"如何把事做对"，Portfolio 层解决"做对的事"。</p>
+<p><strong>关键洞察</strong>：再好的 Squad、再顺畅的 VS，如果做的事本身价值低，整体提效都是假的。
+AI 时代的 Portfolio 治理变得更关键——AI 让"做事的成本"急剧下降，意味着"做错事的机会成本"急剧上升。</p>
+</blockquote>
+<h3 id="71-portfolio">7.1 为什么 Portfolio 层是最大杠杆</h3>
+<p><strong>传统视角</strong>：Portfolio 层是"高层规划"，离一线很远，慢且僵化。</p>
+<p><strong>AI 时代的反转</strong>：
+- AI 让 Squad 交付速度从月级降到周级
+- 决策周期不变（季度级）→ <strong>决策成为新瓶颈</strong>
+- 做错一个 Epic 的成本 = 30 个 Squad × 一个 PI 的产出</p>
+<p>Portfolio 不再是"战略文件夹"，而是<strong>实时的价值流投资组合管理系统</strong>。</p>
+<h3 id="72-portfolio">7.2 Portfolio 层的核心机制 <span class="inline-badge core">Core</span> 内核</h3>
+<h4 id="721-vs-investment-portfolio">7.2.1 价值流投资组合（VS Investment Portfolio）</h4>
+<blockquote>
+<p>把 N 个 VS 视为投资组合，按"价值/投入"比例动态分配资源。</p>
+</blockquote>
+<p><strong>核心问题</strong>：
+- 哪些 VS 在增长（投入应增加）？
+- 哪些 VS 在衰退（投入应减少或退出）？
+- 哪些新机会值得新建 VS？</p>
+<p><strong><span class="inline-badge instance">Instance</span> 当前实例</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">VS 投资组合矩阵（季度评审）
+
+        高价值
+          │
+   投入↑  │  投入↑↑
+   (扩大)  │  (重点投入)
+          │
+──────────┼──────────  战略对齐度
+          │
+   投入↓  │  投入维持
+   (退出)  │  (观察)
+          │
+        低价值
+</code></pre></div>
+<h4 id="722-lean-budget-guardrails">7.2.2 Lean Budget &amp; Guardrails <span class="inline-badge core">Core</span> 内核</h4>
+<blockquote>
+<p>放弃"项目预算"模式，采用"价值流持续预算 + 护栏"。</p>
+</blockquote>
+<p><strong>传统模式（已过时）</strong>：
+- 项目立项 → 申请预算 → 按预算执行 → 验收
+- 问题：AI 时代变化太快，立项时的假设半年就过时</p>
+<p><strong>Lean Budget 模式</strong>：
+- 每个 VS 有持续滚动的预算（按季度调整）
+- Portfolio 不审批每个 Epic，只设"护栏"（如安全、合规、技术标准）
+- VS 在护栏内自主决策投资方向</p>
+<p><strong>护栏示例</strong>：
+- 🛡️ 任何 VS 不得做违反数据合规的项目
+- 🛡️ 任何 VS 不得绕过共享平台另起炉灶
+- 🛡️ 任何 VS 的单 Epic 预算不超过总预算的 X%</p>
+<h4 id="723-okr">7.2.3 战略主题与 OKR 对齐 <span class="inline-badge core">Core</span> 内核</h4>
+<blockquote>
+<p>Portfolio 通过"战略主题"对齐所有 VS，而不是通过审批每个项目。</p>
+</blockquote>
+<p><strong>机制</strong>：
+- Portfolio 层每季度发布 3-5 个"战略主题"（如"提升经销商数字化体验"、"AI 原生交付转型"）
+- 每个 VS 根据战略主题制定自己的 OKR
+- Portfolio 只检查 OKR 是否与战略主题对齐，不检查具体活动</p>
+<p><strong>好处</strong>：
+- 一线 VS 自主决定如何实现战略，不受微观干预
+- 战略变化时只改主题，VS 自己调整</p>
+<h4 id="724-vs-art">7.2.4 跨 VS / 跨 ART 资源调度 <span class="inline-badge core">Core</span> 内核</h4>
+<blockquote>
+<p>Portfolio 是组织内"流动资源"的最高调度者。</p>
+</blockquote>
+<p><strong>调度对象</strong>：
+- 人员（专家池 / 核心骨干的跨 VS 流动）
+- 预算（VS 间的预算重分配）
+- AI 能力（共享 Agent / Skill 的优先级）
+- 数据（跨 VS 数据共享的策略）</p>
+<p><strong>机制</strong>：
+- 季度资源再分配会议（不是每个项目单独审批）
+- 紧急情况的"快速重组通道"（48h 内可临时调动资源）</p>
+<h3 id="73-portfolio">7.3 Portfolio 治理结构 <span class="inline-badge core">Core</span> 内核 + <span class="inline-badge instance">Instance</span> 实例</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌──────────────────────────────────────────────────────────┐
+│              📊 Portfolio Steering Committee              │
+│  ────────────────────────────────────────────────────    │
+│  组成（<span class="inline-badge instance">Instance</span> 实例）：                                          │
+│  • CDO / CIO（数字化战略）                                 │
+│  • Business Lead（业务方代表）                             │
+│  • Finance Partner（投资视角）                             │
+│  • Portfolio Head（运营总指挥）                            │
+│                                                            │
+│  职责（<span class="inline-badge core">Core</span> 内核）：                                          │
+│  • 季度发布战略主题                                        │
+│  • 季度审视 VS 投资组合                                    │
+│  • 设定护栏（合规/技术/预算上限）                          │
+│  • 决定新建 / 关闭 VS                                      │
+│                                                            │
+│  节奏：                                                    │
+│  • 季度战略评审（1 天）                                    │
+│  • 月度组合审视（2 小时）                                  │
+│  • 紧急决策通道（48h 响应）                                │
+└──────────────────────────────────────────────────────────┘
+                            ↓
+┌──────────────────────────────────────────────────────────┐
+│              🚂 ART 三人决策小组（多个 ART）               │
+│  （承上启下：把 Portfolio 战略转化为 ART 协同）             │
+└──────────────────────────────────────────────────────────┘
+                            ↓
+                  VS / Squad / Agent
+</code></pre></div>
+<h3 id="74-portfolio-ai">7.4 Portfolio 层的 AI 应用 <span class="inline-badge core">Core</span> 内核</h3>
+<blockquote>
+<p>Portfolio 治理本身也应该 AI 原生化，否则会成为新瓶颈。</p>
+</blockquote>
+<p><strong><span class="inline-badge instance">Instance</span> 典型应用（当前实例）</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>AI 应用</th>
+<th>提效效果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VS 价值评估</strong></td>
+<td>AI 分析 VS 的业务指标趋势、客户反馈、市场信号，自动生成评估报告</td>
+<td>季度评审从 3 天降到 1 天</td>
+</tr>
+<tr>
+<td><strong>战略主题对齐扫描</strong></td>
+<td>AI 扫描所有 VS Backlog，识别与战略主题不对齐的 Epic</td>
+<td>实时对齐，非滞后审查</td>
+</tr>
+<tr>
+<td><strong>依赖冲突预警</strong></td>
+<td>AI 跨 VS 分析依赖图，预警未来 1-2 个 PI 可能出现的瓶颈</td>
+<td>提前 3 个月化解依赖</td>
+</tr>
+<tr>
+<td><strong>资源调度建议</strong></td>
+<td>AI 基于 VS 产出/预算/优先级，给出资源再分配建议</td>
+<td>数据驱动调度，非政治博弈</td>
+</tr>
+<tr>
+<td><strong>新机会识别</strong></td>
+<td>AI 分析外部市场信号 + 内部能力，建议新 VS 机会</td>
+<td>战略响应速度提升</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Portfolio Head 的工作变化</strong>：
+- 传统：写 PPT、做 Excel、开评审会
+- AI 原生：审 AI 分析报告、做关键判断、与一线对话</p>
+<h3 id="75-portfolio">7.5 Portfolio 层提效的反模式 <span class="inline-badge warn">Risk</span></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>反模式</th>
+<th>表现</th>
+<th>后果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>战略文件夹</strong></td>
+<td>Portfolio 只产出年度战略文档</td>
+<td>战略与执行脱节</td>
+</tr>
+<tr>
+<td><strong>审批型 Portfolio</strong></td>
+<td>每个 Epic 都要 Portfolio 审批</td>
+<td>Portfolio 成为最大瓶颈</td>
+</tr>
+<tr>
+<td><strong>微观干预</strong></td>
+<td>Portfolio 干预 VS 内部决策</td>
+<td>VS Lead 失去自主性</td>
+</tr>
+<tr>
+<td><strong>慢决策</strong></td>
+<td>战略调整需要数月</td>
+<td>错过市场窗口</td>
+</tr>
+<tr>
+<td><strong>政治博弈</strong></td>
+<td>资源分配靠人情而非数据</td>
+<td>高价值 VS 拿不到资源</td>
+</tr>
+<tr>
+<td><strong>AI 缺位</strong></td>
+<td>Portfolio 层不用 AI，靠人工分析</td>
+<td>Portfolio 成为唯一非 AI 原生层</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="76">7.6 四层提效贯通示例</h3>
+<p>举一个完整的"四层贯通"提效场景，看价值如何端到端流动：</p>
+<p><strong>场景</strong>：客户反馈"经销商门户响应慢，影响销售转化"</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">📊 Portfolio 层（小时级响应）
+  • AI 自动汇总客户反馈，识别这是&quot;经销商体验&quot;战略主题下的高价值机会
+  • Portfolio 决定：本季度追加投入到 VS2.1 经销商门户
+  • 调拨 1 个 Squad 从其他 VS 临时支援
+
+      ↓ 战略对齐 + 资源到位
+
+🚂 ART 层（天级响应）
+  • RTE 召开 30 分钟跨 VS 同步会议
+  • 识别出与 VS3.3 (AI/ML 平台) 的依赖
+  • 三人决策小组批准 VS2.1 优先使用平台资源
+
+      ↓ 协同就绪
+
+🌊 Value Stream 层（周级响应）
+  • VS2.1 Lead 拆解为 3 个 Epic：
+    - 性能优化（VS2.1 内部）
+    - 缓存策略（依赖 VS3.3）
+    - UI 简化（独立完成）
+  • 公开依赖矩阵，VS Lead 直接对接 VS3.3 Lead
+
+      ↓ 任务下沉
+
+⚡ Squad 层（日级响应）
+  • Squad-2.1.A 接手&quot;性能优化&quot;Epic
+  • AI Orchestrator 拆解为 5 个 Story
+  • AI Engineer 调度 Agent 池开始实现
+  • Harness Master 设计性能基线测试
+  • 5 天后第一个 Story 上线，性能提升 30%
+
+      ↓ 持续度量
+
+📊 Portfolio 层（月级闭环）
+  • 客户反馈改善 + 转化率回升 → 验证投资有效
+  • 决定继续追加投入 / 或转移资源到下一个机会
+</code></pre></div>
+<p><strong>这就是"整体提效"——四层协同，价值快速流动，资源动态调整。</strong></p>
+<hr />
+<h1 id="_4" data-anchor="_4">第三部分 · 理论支撑</h1>
+<h2 id="8" data-anchor="8">8. 赛马与协作的平衡机制</h2>
+<h3 id="81">8.1 内生张力</h3>
+<p>3 人原子小队天然有两种倾向：
+- <strong>赛马倾向</strong>：Squad 间竞争 → 谁交付得快/质量好谁拿资源 → 但可能导致重复造轮子、不愿共享
+- <strong>协作倾向</strong>：Squad 间共享 → Skill 复用、专家流动 → 但可能搭便车、躺平</p>
+<h3 id="82">8.2 三层平衡框架</h3>
+<p>借鉴韩都衣舍（极致赛马）、海尔（市场化协作）、蒙德拉贡（团结互助）、Spotify（分层协作）四个原型：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">第一层：结构性协作（强制底线）
+├─ Skill 必须开源到内部市场
+├─ 关键 Blueprint 必须复用
+└─ 跨 Squad 代码评审必参与
+
+第二层：市场化协作（激励杠杆）
+├─ 原子币（AtomCoin）内部积分
+├─ Skill 被复用 → 原作者获得积分
+├─ 专家池服务计价
+└─ 全局改进奖励
+
+第三层：文化性协作（自愿文化）
+├─ 季度黑客松
+├─ Squad 互访
+└─ 失败案例分享会
+</code></pre></div>
+<h3 id="83">8.3 多维度排名机制</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>权重</th>
+<th>衡量方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>交付效率</td>
+<td>40%</td>
+<td>Story 完成数 × 复杂度</td>
+</tr>
+<tr>
+<td>质量</td>
+<td>30%</td>
+<td>缺陷率 + 客户满意度</td>
+</tr>
+<tr>
+<td>协作贡献</td>
+<td>20%</td>
+<td>Skill 被复用次数 + 帮助其他 Squad 次数</td>
+</tr>
+<tr>
+<td>创新</td>
+<td>10%</td>
+<td>新 Blueprint/Skill 产出</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h2 id="9" data-anchor="9">9. 先进公司实践对标</h2>
+<blockquote>
+<p><strong><span class="inline-badge instance">Instance</span> 实例性说明</strong>：本章的 10 家公司对标是 <strong>2026 Q2 时点的快照</strong>。这些公司的实践本身每天都在演化（如 Anthropic 每月发新工程博客、Cursor 每周迭代）。
+<strong>阅读姿势</strong>：关注<strong>共同基因</strong>（9.2 节）而非具体公司案例。新案例可通过附录 F 注册表持续接入。</p>
+</blockquote>
+<h3 id="91-10-2026-q2">9.1 当前 10 家公司的核心启发（2026 Q2 快照）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>公司</th>
+<th>核心实践</th>
+<th>对原子小队的启发</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Anthropic</strong></td>
+<td>Workflow→Agent 渐进；ACI &gt; Prompt；<strong>Skill 渐进式架构 + 评估驱动迭代 + 管道化自主执行</strong></td>
+<td>5种模式按需组合；Skill 三级加载、Eval-Driven 开发循环、recon→find→verify→report→patch 管道</td>
+</tr>
+<tr>
+<td><strong>DeepSeek</strong></td>
+<td>&lt;200 人做大模型；无 PM</td>
+<td>极致小团队 + 研究即工程</td>
+</tr>
+<tr>
+<td><strong>字节/飞书</strong></td>
+<td>Context not Control；工具即组织</td>
+<td>Workspace = 多维表格，消灭"翻译"</td>
+</tr>
+<tr>
+<td><strong>OpenAI</strong></td>
+<td>Unified Codebase；MTS 统一头衔</td>
+<td>消除研究/工程边界</td>
+</tr>
+<tr>
+<td><strong>DeepMind</strong></td>
+<td>Apollo Program；AlphaGo 15人团队</td>
+<td>精英小团队攻坚 + 长周期目标</td>
+</tr>
+<tr>
+<td><strong>Midjourney</strong></td>
+<td>11人全球顶级 AI 产品</td>
+<td>小团队极限远超想象</td>
+</tr>
+<tr>
+<td><strong>Linear</strong></td>
+<td>零会议文化；Quality over Speed</td>
+<td>异步决策 + 拒绝速度牺牲质量</td>
+</tr>
+<tr>
+<td><strong>Cursor</strong></td>
+<td>Cursor 用 Cursor 开发；Compounding 改进</td>
+<td>Dogfooding 产生复利</td>
+</tr>
+<tr>
+<td><strong>GitHub Copilot</strong></td>
+<td>30-40% 代码采纳；大规模 A/B</td>
+<td>A/B 测试 Blueprint，数据驱动</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h3 id="92-6">9.2 提炼出的 6 个共同基因 <span class="inline-badge core">Core</span> 内核</h3>
+<p>跨 10 家公司提炼出的<strong>共性基因</strong>——这才是稳定不变的内核，比具体公司实践寿命更长：</p>
+<ol>
+<li><strong>研究即工程</strong>：消除"需求→设计→开发→测试"流水线</li>
+<li><strong>信息透明</strong>：默认公开，Agent 推理过程可审计</li>
+<li><strong>去中介化</strong>：消灭 PM 对齐、消灭会议</li>
+<li><strong>Dogfooding 正反馈</strong>：用自己的工具开发自己的工具</li>
+<li><strong>简单优先</strong>：不上复杂框架，渐进引入复杂度</li>
+<li><strong>质量信仰</strong>：Quality over Speed，ACI 设计 + A/B 测试</li>
+</ol>
+<h3 id="93-3">9.3 3 个新增架构原则 <span class="inline-badge core">Core</span> 内核</h3>
+<p><strong>原则 1: ACI-First Design（接口优先设计）</strong></p>
+<blockquote>
+<p>Anthropic："We actually spent more time optimizing our tools than the overall prompt." 通过改变 Agent 与工具的交互方式（Poka-yoke），减少错误概率。</p>
+</blockquote>
+<p><strong>原则 2: Compounding Dogfooding（复利式自用）</strong></p>
+<blockquote>
+<p>Cursor：每个 Sprint 沉淀的 Skill 和 Blueprint 让下一个 Sprint 更快。<strong>组织的核心竞争优势不是人数，而是复利资产的积累速度</strong>。</p>
+</blockquote>
+<p><strong>原则 3: Zero-Meeting Default（零会议默认）</strong></p>
+<blockquote>
+<p>Linear：用 50 人服务数百万用户。3人 + N Agent 的配置天然支持零会议——AI Agent 消灭了"对齐"的需求。</p>
+<p>📌 新原则的提炼方式见<a href="#13">第 13 章</a>的"原则升级路径"。当社区/行业涌现新的稳定基因时，可通过相同流程升级为新原则。</p>
+</blockquote>
+<h2 id="94-anthropic-2026-05" data-anchor="94-anthropic-2026-05">9.4 Anthropic 生产实践模式（2026-05 更新）<span class="inline-badge instance">Instance</span> 实例</h2>
+<blockquote>
+<p><strong>来源</strong>：本小节基于 Anthropic 公开 GitHub 仓库（<a href="https://github.com/anthropics/skills">anthropics/skills</a>、<a href="https://github.com/anthropics/claude-code">anthropics/claude-code</a>、<a href="https://github.com/anthropics/defending-code-reference-harness">anthropics/defending-code-reference-harness</a>）及其工程博客《Equipping agents for the real world with Agent Skills》<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">8</a></sup> 的公开信息整理。
+<strong>性质</strong>：这些是 Anthropic 当前产品的内部工程实践，不是组织设计模板，但其模式可直接映射到 Squad 层的 Agent 配置、Skill 开发和质量验证流程。</p>
+</blockquote>
+<h3 id="1progressive-disclosure">模式 1：渐进式披露架构（Progressive Disclosure）</h3>
+<p><strong>来源</strong>：anthropics/skills 仓库的 <code>skill-creator/SKILL.md</code><sup id="fnref:2"><a class="footnote-ref" href="#fn:2">1</a></sup></p>
+<p><strong>核心机制</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│  Level 1: Metadata (name + description)                     │
+│  • 始终常驻上下文 (~100 词)                                   │
+│  • 决定 Skill 何时触发                                        │
+├─────────────────────────────────────────────────────────────┤
+│  Level 2: SKILL.md body                                     │
+│  • Skill 触发时加载 (&lt;500 行)                                │
+│  • 核心工作流、决策树、最佳实践                                 │
+├─────────────────────────────────────────────────────────────┤
+│  Level 3: Bundled Resources                                 │
+│  • 按需加载，无容量限制                                       │
+│  • scripts/ (黑盒可执行脚本)                                  │
+│  • references/ (领域参考文档)                                 │
+│  • assets/ (模板、字体、图标等)                               │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>对 Squad 层的启发</strong>：
+- <strong>Skill 设计不是"写得越多越好"</strong>——核心指令控制在 500 行以内，超过则分层
+- <strong>参考文件按领域隔离</strong>——多技术栈支持时，references/ 按变体分离（如 aws.md / gcp.md / azure.md），避免一次性加载无关内容
+- <strong>脚本作为黑盒</strong>——复杂、确定性、重复性任务封装为脚本，通过 <code>--help</code> 暴露接口后直接调用，不加载到 LLM 上下文（见 webapp-testing SKILL.md<sup id="fnref:3"><a class="footnote-ref" href="#fn:3">2</a></sup> 的 <code>scripts/with_server.py</code> 设计）</p>
+<h3 id="2eval-driven-development">模式 2：评估驱动开发（Eval-Driven Development）</h3>
+<p><strong>来源</strong>：anthropics/skills 仓库的 <code>skill-creator/SKILL.md</code><sup id="fnref2:2"><a class="footnote-ref" href="#fn:2">1</a></sup></p>
+<p><strong>核心循环</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">捕获意图 → 访谈研究 → 编写 SKILL.md → 创建测试用例
+    ↓
+并行运行 (with-skill vs baseline)
+    ↓
+定量断言评分 + 用户定性反馈
+    ↓
+基于反馈重写 Skill → 扩大测试集 → 重复
+</code></pre></div>
+<p><strong>关键实践</strong>：
+1. <strong>A/B 对比必须同时启动</strong>：with-skill 和 baseline（无 skill 或旧版本 skill）的测试运行必须在同一轮次并行启动，避免时间偏差
+2. <strong>定量 + 定性双轨</strong>：
+   - 定量：pass rate、执行时间、token 消耗（mean ± stddev）
+   - 定性：用户在浏览器 viewer 中逐条审阅输出，留下文字反馈
+3. <strong>评估问题设计原则</strong>（来自 mcp-builder SKILL.md<sup id="fnref:4"><a class="footnote-ref" href="#fn:4">3</a></sup>）：
+   - Independent（互不依赖）
+   - Read-only（非破坏性）
+   - Complex（需要多步工具调用）
+   - Realistic（基于真实人类用例）
+   - Verifiable（有明确可验证的答案）
+   - Stable（答案不会随时间变化）</p>
+<p><strong>对 Harness Master 的启发</strong>：
+- Skill 本身也需要质量门——不是写一次就永久有效，而是通过 eval 循环持续验证
+- "非歧视性断言"检查：如果某个断言无论 skill 是否存在都总是通过，则该断言无价值，需剔除</p>
+<h3 id="3-reconnaissance-then-action">模式 3：侦察-行动分离（Reconnaissance-Then-Action）</h3>
+<p><strong>来源</strong>：
+- defending-code-reference-harness README<sup id="fnref:5"><a class="footnote-ref" href="#fn:5">4</a></sup> 的 "Map the system before you scan it"
+- webapp-testing SKILL.md<sup id="fnref2:3"><a class="footnote-ref" href="#fn:3">2</a></sup> 的 "Reconnaissance-Then-Action Pattern"</p>
+<p><strong>核心原则</strong>：</p>
+<blockquote>
+<p><strong>Don't prescribe how to hunt; give context and step away.</strong></p>
+</blockquote>
+<p><strong>在漏洞检测管道中的体现</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Step 1 (Day 1): 交互式侦察
+  ├─ /threat-model bootstrap → 建立威胁模型
+  ├─ /vuln-scan → 静态扫描
+  ├─ /triage → 人工验证、去重、分级
+  └─ 产出：THREAT_MODEL.md, TRIAGE.json
+
+Step 2 (Day 2+): 自动化行动
+  ├─ recon → 轻量 agent 读源码，划分 focus_areas（7 个独立子系统）
+  ├─ run → N 个并行 find-agent，各自从不同 focus_area 出发
+  ├─ verify → 独立 grade-agent 在清洁容器中验证每个崩溃
+  └─ report → 可执行见证（crash trace）优于文字论证
+</code></pre></div>
+<p><strong>对 Squad 层的启发</strong>：
+- <strong>任何复杂任务都先分区再并行</strong>： recon 阶段把搜索空间切分，避免多个 agent 堆在同一个浅层 bug 上
+- <strong>验证器是承重墙（load-bearing component）</strong>：廉价程序化门控（sanitizer signal, reproduces 3/3）+ 对抗性评分 agent，优先消除假阳性
+- <strong>交互式启动，自动化放大</strong>：Day 1 人工引导建立上下文和基线，Day 2+ 管道自主运行</p>
+<h3 id="4pipelined-autonomous-execution">模式 4：管道化自主执行（Pipelined Autonomous Execution）</h3>
+<p><strong>来源</strong>：defending-code-reference-harness<sup id="fnref2:5"><a class="footnote-ref" href="#fn:5">4</a></sup> 的 <code>harness/</code> 管道设计</p>
+<p><strong>管道结构</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">recon → find → verify → report → patch
+  ↑      ↑       ↑        ↑       ↑
+  │      │       │        │       └─ 独立验证阶梯：apply→build→PoC stop→regression pass→re-attack
+  │      │       │        └─ 可执行见证优先于文字报告
+  │      │       └─ 清洁容器中独立验证（finder 从未触碰过的环境）
+  │      └─ 并行 agent，按 recon 分区各自独立搜索
+  └─ 轻量映射，生成 focus_areas 列表
+</code></pre></div>
+<p><strong>关键设计</strong>：
+1. <strong>两容器信任边界</strong>：finder 运行在隔离容器中，verifier 在另一个从未被 finder 触碰过的容器中运行
+2. <strong>gVisor 沙箱</strong>：自主 agent 执行目标代码时，必须在 gVisor 沙箱内运行，出站流量限制到 API 调用
+3. <strong>验证阶梯（Verification Ladder）</strong>：patch 后的 diff 必须经过可执行验证——原始 PoC 是否停止触发、回归测试是否仍通过、重新攻击 patched binary 是否失败</p>
+<p><strong>对 Harness Master 的启发</strong>：
+- 确定性裁判（编译、单测）+ 统计性裁判（reproduces 3/3）+ 专家性裁判（独立 agent 评审）的三层验证，在 Anthropic 的管道中是<strong>物理隔离</strong>的，而非逻辑隔离
+- <strong>最深层结果来自"执行-观察-迭代"循环</strong>：给 agent 一个可运行的环境（HTTP 流量、日志、种子数据库），让它 chaining findings 而非止步于静态报告</p>
+<h3 id="5-skill-interactive-automated-hybrid">模式 5：交互式 Skill + 自动化管道混合（Interactive + Automated Hybrid）</h3>
+<p><strong>来源</strong>：defending-code-reference-harness<sup id="fnref3:5"><a class="footnote-ref" href="#fn:5">4</a></sup> 的 Day 1-2 分工设计</p>
+<p><strong>分层</strong>：
+| 阶段 | 模式 | 安全边界 | 人工介入 |
+|------|------|---------|---------|
+| Day 1 | 交互式 Skill (<code>/quickstart</code>, <code>/threat-model</code>, <code>/vuln-scan</code>, <code>/triage</code>) | 只读写文件，每次工具使用需人工批准 | 高 |
+| Day 2+ | 自动化管道 (<code>bin/vp-sandboxed run</code>) | gVisor 容器隔离，agent 必须在沙箱内 | 低（只在 triage/patch 时介入）|</p>
+<p><strong>对 Squad 层的启发</strong>：
+- 不是所有任务都适合"全自动"——新任务或高风险任务从交互式开始，成熟后管道化
+- Skill 设计应支持两种模式：交互式（人工批准每一步）和自主式（在护栏内自主运行）
+- 安全边界随自动化程度提升而增强：从"人工批准"到"沙箱隔离"</p>
+<h3 id="6de-prescriptive-instructions">模式 6：去预设化指令（De-prescriptive Instructions）</h3>
+<p><strong>来源</strong>：defending-code-reference-harness README<sup id="fnref4:5"><a class="footnote-ref" href="#fn:5">4</a></sup> 的 Best Practices</p>
+<p><strong>核心原则</strong>：</p>
+<blockquote>
+<p><strong>Long instructions, staged checklists, and piles of reference material usually backfire: the model pattern-matches your scaffolding instead of reasoning about the code.</strong></p>
+</blockquote>
+<p><strong>实践</strong>：
+- 给 agent "目标 + 工具 + 上下文"，而不是 "步骤 1-10 的详细清单"
+- 让 agent 自己选择路径——它经常以人类研究者想不到的方式找到漏洞
+- 用威胁模型（threat model）划定边界，而非用检查列表规定动作</p>
+<p><strong>对 AI Orchestrator 的启发</strong>：
+- AI Orchestrator 的职责是"定义目标、提供上下文、划定边界"，而非"编排每一步动作"
+- 过度编排会让 agent 模式匹配脚手架，而非真正推理——这与本框架中"AI 生成在前，人类审查在后"的内核一致</p>
+<h3 id="7-setup-execution-split">模式 7：环境初始化-增量执行分离（Setup-Execution Split）</h3>
+<p><strong>来源</strong>：Anthropic 长时运行 Agent 研究<sup id="fnref:6"><a class="footnote-ref" href="#fn:6">5</a></sup></p>
+<p><strong>核心机制</strong>：
+Anthropic 发现，让一个 Agent 从零开始一次性完成大型任务（如"克隆 claude.ai"），几乎必然失败——Agent 要么试图一次做太多导致上下文溢出，要么看到已有进展就提前宣布完成。解决方案是把工作拆成两个截然不同的阶段：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│  Session 1: 初始化器（Initializer）                          │
+│  • 只做环境搭建，不做功能开发                                  │
+│  • 产出：init.sh（一键启动开发环境）                           │
+│  • 产出：feature_list.json（200+ 条可验证特性，初始全部 ❌）  │
+│  • 产出：初始 git commit                                     │
+├─────────────────────────────────────────────────────────────┤
+│  Session 2-N: 执行器（Coding Agent）                         │
+│  • 每次会话只做一件事：选一个未完成的 feature，实现它          │
+│  • 启动流程固定：读 git log → 读 progress file → 跑冒烟测试   │
+│  • 结束流程固定：git commit → 写 progress note → 标记 feature │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>关键发现</strong>：
+- Anthropic 试过让同一个 Agent 既搭建环境又写功能——Agent 倾向于在搭建环境时就试图"顺便"实现核心功能，结果做到一半上下文溢出，下一个 session 拿到的是一个半成品+无文档的环境
+- 把"初始化"和"执行"强制分离后，Agent 在后续 session 中每次都能快速恢复上下文并稳定产出</p>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>Day 1 是"初始化日"，不是"开发日"</strong>：AI Orchestrator 把需求拆成可验证的特性清单（不是 PRD 段落），AI Engineer 搭建项目骨架和开发环境脚本，Harness Master 定义验收标准
+- <strong>Day 2-5 是"增量执行日"</strong>：每天只聚焦一个 Story，做完一个再开下一个，不并行
+- <strong>特性清单是团队共享的"完成定义"</strong>：Orchestrator 写清单，Engineer 实现，QA 验证——三方看的是同一份清单，消灭"我觉得做完了"的模糊空间</p>
+<h3 id="8feature-list-driven-tracking">模式 8：特性清单驱动进度追踪（Feature-List-Driven Tracking）</h3>
+<p><strong>来源</strong>：Anthropic 长时运行 Agent 研究<sup id="fnref2:6"><a class="footnote-ref" href="#fn:6">5</a></sup></p>
+<p><strong>核心机制</strong>：
+Anthropic 用一份结构化的 JSON 文件作为 AI Agent 和人类共享的进度视图。关键设计决策：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>设计选择</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用 JSON 而非 Markdown</td>
+<td>Agent 更不容易"顺手"修改或覆盖 JSON 文件</td>
+</tr>
+<tr>
+<td>200+ 条细粒度特性</td>
+<td>不是 10 条大功能，而是"新建聊天按钮创建新对话""回车键发送消息"级别</td>
+</tr>
+<tr>
+<td>初始全部标记 <code>"passes": false</code></td>
+<td>不给 Agent "已经差不多了"的错觉</td>
+</tr>
+<tr>
+<td>Agent 只能改 <code>passes</code> 字段</td>
+<td>严禁删除或修改特性描述——防止 Agent 降低标准</td>
+</tr>
+<tr>
+<td>每条特性包含验证步骤</td>
+<td>不是"登录功能正常"，而是 5 步可执行验证</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>特性条目示例</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>json</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-json">{
+  &quot;category&quot;: &quot;functional&quot;,
+  &quot;description&quot;: &quot;用户点击'新建聊天'按钮后创建空白对话&quot;,
+  &quot;steps&quot;: [
+    &quot;导航到主界面&quot;,
+    &quot;点击'新建聊天'按钮&quot;,
+    &quot;验证新对话已创建&quot;,
+    &quot;验证聊天区域显示欢迎状态&quot;,
+    &quot;验证对话出现在侧边栏&quot;
+  ],
+  &quot;passes&quot;: false
+}
+</code></pre></div>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>用结构化特性清单取代"PRD + 口头对齐"</strong>：AI Orchestrator 产出特性清单（JSON/YAML），每条可独立验证
+- <strong>Harness Master 负责清单完整性</strong>：不是等开发完再测，而是在 Day 1 就参与清单评审——"这些验收步骤够不够？要不要加边界场景？"
+- <strong>Daily 站会看清单而非"口头汇报"</strong>：今天改了哪几条从 ❌ → <span class="inline-badge ok">OK</span>？没过的为什么？</p>
+<h3 id="9clean-state-handoff">模式 9：会话间清洁交接（Clean-State Handoff）</h3>
+<p><strong>来源</strong>：Anthropic 长时运行 Agent 研究<sup id="fnref3:6"><a class="footnote-ref" href="#fn:6">5</a></sup></p>
+<p><strong>核心机制</strong>：
+Anthropic 发现 Agent 在多 session 工作中最大的效率杀手不是模型能力，而是<strong>上下文恢复成本</strong>——每个新 session 要从零理解"项目现在是什么状态"。他们的解决方案来自观察优秀人类工程师的日常工作习惯：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">每个 Session 结束时（Clean Exit）:
+  ├─ git commit（含清晰的 commit message）
+  ├─ 更新 claude-progress.txt（本次做了什么、下一步建议做什么）
+  └─ 确保代码处于&quot;可直接合并到 main&quot;的状态（无已知 bug）
+
+下个 Session 启动时（Quick Recovery）:
+  ├─ git log --oneline -20（了解最近做了什么）
+  ├─ 读 claude-progress.txt（了解进度和下一步）
+  ├─ 运行 init.sh 启动开发服务器
+  └─ 跑一遍基础冒烟测试（确保环境没有被上次遗留的 bug 破坏）
+</code></pre></div>
+<p><strong>关键发现</strong>：
+- 没有清洁交接时，Agent 平均要花 <strong>20-30% 的 session 时间</strong>恢复上下文——读文件、猜状态、修复被上一个 session 遗留 bug 破坏的环境
+- 有了清洁交接后，恢复时间降到 <strong>&lt;5%</strong>，Agent 几乎立即进入生产状态</p>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>每周期复盘不只是"聊聊"，而是"清洁交接"</strong>：git commit message 写清楚，Skill 更新记录写清楚，让下一个周期（或接手的人/Agent）能 5 分钟内恢复上下文
+- <strong>"可合并到 main 的状态"是硬约束</strong>：每天结束时代码必须编译通过+冒烟测试通过，不允许"明天再修"
+- <strong>Harness Master 维护一份 init.sh 级别的环境恢复脚本</strong>：确保任何人（或 Agent）接手时能一键拉起完整开发环境</p>
+<h3 id="10-one-at-a-time-e2e-self-verification">模式 10：一次一件事 + 端到端自验证（One-at-a-Time + E2E Self-Verification）</h3>
+<p><strong>来源</strong>：Anthropic 长时运行 Agent 研究<sup id="fnref4:6"><a class="footnote-ref" href="#fn:6">5</a></sup></p>
+<p><strong>核心机制</strong>：
+Anthropic 发现 Agent 最常见的质量失败模式不是"代码写错了"，而是<strong>"功能标记为完成但没有真正端到端验证"</strong>。Agent 倾向于跑完单元测试就标记 passing，但实际上功能在浏览器里根本不可用。</p>
+<p><strong>解决方案</strong>：
+- <strong>一次只做一个 feature</strong>：不允许 Agent 同时推进多个功能——分散注意力导致每个都做不彻底
+- <strong>必须用真实用户路径验证</strong>：给 Agent 配备浏览器自动化工具（如 Puppeteer MCP），让它像真实用户一样操作应用来验证
+- <strong>验证失败 → 修复 → 再验证 → 才标记 passing</strong>：不是"测试挂了就标记 known issue"，而是修复到通过</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">实现 feature → 单元测试通过
+        ↓
+启动开发服务器 → 浏览器自动化验证端到端流程
+        ↓
+     ┌─ 通过 → 标记 passing → 进入下一个 feature
+     └─ 失败 → 修复 → 重新验证（循环直到通过）
+</code></pre></div>
+<p><strong>关键发现</strong>：
+- 不给 Agent 浏览器自动化工具时，Agent 标记为"完成"的功能中，约 <strong>30-40% 端到端不可用</strong>
+- 给了浏览器自动化工具并明确要求端到端验证后，这个比例降到 <strong>&lt;5%</strong></p>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>"Done"的定义必须是"端到端验证通过"，不是"代码写完了"</strong>：AI Engineer 提交代码前必须跑端到端验证（集成测试 / E2E 测试 / 手动点击验证）
+- <strong>Harness Master 不给"感觉差不多"放行</strong>：质量门的通过条件必须是可自动验证的断言，而非主观判断
+- <strong>每天只聚焦一个 Story</strong>：不在多个 Story 之间切换——5 天周期 = 5 个 Story，每天一个</p>
+<h3 id="11tiered-trust-boundary">模式 11：分级操作信任边界（Tiered Trust Boundary）</h3>
+<p><strong>来源</strong>：Anthropic Claude Code auto mode 设计<sup id="fnref:7"><a class="footnote-ref" href="#fn:7">6</a></sup></p>
+<p><strong>核心机制</strong>：
+Anthropic 在 Claude Code 的 auto mode 中将 AI 的操作权限分成三级，不是"全部审批"或"全部放行"的二元选择，而是按风险分级：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Tier 1: 内置安全白名单 → 自动放行，不经过分类器
+  ├─ 文件读取、文本搜索、代码导航
+  ├─ Todo 管理、Plan 模式切换
+  └─ 用户配置的 always-allow 规则（如&quot;允许运行代码格式化工具&quot;）
+
+Tier 2: 项目内文件操作 → 自动放行，不经过分类器
+  ├─ 项目目录内的文件写入和编辑
+  └─ 可通过版本控制回溯，风险可控
+
+Tier 3: 分类器审核 → 只有高风险操作才触发
+  ├─ Shell 命令、网络请求、外部工具集成
+  ├─ 项目目录外的文件系统操作
+  └─ 子 Agent 的启动和返回
+</code></pre></div>
+<p><strong>关键设计理念</strong>：
+- 用户在实际使用中批准了 <strong>93%</strong> 的人工审批弹窗——意味着大部分审批是形式化的，真正需要人判断的只有少数高风险操作
+- 分级后，<strong>99.6% 的日常操作自动放行</strong>（Tier 1+2），只有 <strong>0.4%</strong> 的操作触发审核（Tier 3）</p>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>Harness Master 的质量门也应分级，不是每个 check 都要人工审批</strong>：
+  - L1 自动门（编译、lint、单测、类型检查）→ AI Agent 自动通过
+  - L2 统计门（测试覆盖率趋势、性能指标波动）→ 异常时通知 Harness Master
+  - L3 人工门（架构评审、安全审查、UX 验收）→ 按风险触发
+- <strong>不要让 Harness Master 变成"审批瓶颈"</strong>：如果 93% 的审批都是形式化的，那把 Harness Master 的人力集中在真正需要判断的 7%</p>
+<h3 id="12-deny-and-continue">模式 12：拒绝-重试而非中断（Deny-and-Continue）</h3>
+<p><strong>来源</strong>：Anthropic Claude Code auto mode 设计<sup id="fnref2:7"><a class="footnote-ref" href="#fn:7">6</a></sup></p>
+<p><strong>核心机制</strong>：
+当 AI Agent 的操作被安全分类器拦截时，Anthropic 的设计不是"停止会话、弹出审批窗口、等待人工介入"，而是：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Agent 发起操作 → 分类器判断
+    ├─ 安全 → 放行，Agent 继续
+    └─ 危险 → 拒绝 + 返回拒绝理由
+                ↓
+         Agent 收到拒绝理由 → 自行寻找更安全的替代路径
+                ↓
+         ┌─ 找到替代方案 → 继续工作（会话不中断）
+         └─ 再次被拒 → 继续尝试（最多连续 3 次 / 累计 20 次）
+                └─ 达到上限 → 停止 + 升级到人工
+</code></pre></div>
+<p><strong>关键设计理念</strong>：
+- 0.4% 的误拦率看似很低，但如果每次误拦都中断会话，对长时任务就是灾难
+- "拒绝-重试"让误拦只消耗一次重试，不影响整体进度
+- 连续拒绝上限（3 次连续 / 20 次累计）是安全阀——防止 Agent 陷入死循环或用各种变体绕过限制</p>
+<p><strong>对 Squad 层的落地指导</strong>：
+- <strong>质量门失败不应直接抛给人</strong>：AI Agent 应先尝试自动修复，只有在反复失败时才升级到 Harness Master 或 AI Engineer
+- <strong>Harness Master 设计质量门时，每个门都应附带"失败时的建议修复方向"</strong>：不给 Agent 只返回"❌ 不通过"，而是"❌ 不通过：测试覆盖率 72%，目标 80%——建议补充 src/auth/ 和 src/payment/ 模块的测试"
+- <strong>设定自动重试上限</strong>：避免 Agent 在"修复-失败-修复"中无限循环——建议默认上限 3 次，超过则标记为 blocked 并通知人类</p>
+<hr />
+<h1 id="_5" data-anchor="_5">第四部分 · 实施路径</h1>
+<h2 id="10" data-anchor="10">10. 三阶段路线图（参考实例）</h2>
+<blockquote>
+<p><strong><span class="inline-badge core">Core</span> 内核</strong>：三阶段递进结构（种子→复制→规模化）
+<strong><span class="inline-badge instance">Instance</span> 实例</strong>：本章所有周数、Squad 数量、成功指标都是<strong>起步参考</strong>。实际节奏由 Pilot 验证后调整。</p>
+<p><strong>重要</strong>：本路线图同时涵盖 <strong>Squad / VS / ART / Portfolio 四层的渐进激活</strong>，不只是 Squad 层。</p>
+</blockquote>
+<h3 id="101">10.1 三阶段结构 <span class="inline-badge core">Core</span> 内核</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Phase 1: 种子期 → Phase 2: 复制期 → Phase 3: 规模化
+   验证可行性       验证可复制性       推广全组织
+   单 Pilot         有限范围扩展       全 ART 覆盖
+   先打通底层        逐层激活上层       四层全打通
+</code></pre></div>
+<p>每个阶段的退出条件是<strong>下一阶段所需的前置假设被验证</strong>，而非完成时间。</p>
+<h3 id="102-phase-1-1-pi">10.2 Phase 1: 种子期 <span class="inline-badge instance">Instance</span> 实例（参考：1 个 PI）</h3>
+<p><strong>目标</strong>：组建 1 个 Pilot Squad，验证 Squad 层的可行性</p>
+<p><strong>关键动作</strong>：
+- 招募 3 个核心成员（AI Orchestrator + AI Engineer + Harness Master）
+- 搭建 Squad Workspace（数据总线 + Agent 基础设施）
+- 选定 1 个高价值 VS 作为试点宿主
+- 交付若干 Story，验证节奏
+- 沉淀首版 Blueprint 和 Skill</p>
+<p><strong>成功标准（参考阈值）</strong>：
+- 短周期达成率达到设定基线
+- AI 代码采纳率达到设定基线
+- 团队成员主观满意度达到设定基线</p>
+<h3 id="103-phase-2-2-3-pi">10.3 Phase 2: 复制期 <span class="inline-badge instance">Instance</span> 实例（参考：2-3 个 PI）</h3>
+<p><strong>目标</strong>：从 1 个 Squad 扩展到若干 Squad，<strong>激活 VS 层提效机制</strong></p>
+<p><strong>关键动作</strong>：
+- 复制 Pilot 经验，组建新 Squad
+- 完整覆盖 1 个 VS（验证 VS 层端到端价值流）
+- 上线 VS 层度量（Lead Time / Cycle Time / Flow Efficiency）
+- 任命 VS Lead，验证 VS 自治模式
+- 建立专家池
+- 搭建共享平台雏形
+- 上线协作激励机制
+- 建立质量门标准</p>
+<p><strong>成功标准（参考阈值）</strong>：
+- 多个 Squad 稳定运行
+- VS 层端到端流动效率显著提升（不只是 Squad 速度）
+- Skill 复用率达到设定基线</p>
+<h3 id="104-phase-3-3-pi">10.4 Phase 3: 规模化 <span class="inline-badge instance">Instance</span> 实例（参考：3+ 个 PI）</h3>
+<p><strong>目标</strong>：全部 Squad 铺开，<strong>激活 ART 协同 + Portfolio 战略两层</strong></p>
+<p><strong>关键动作</strong>：
+- 完成所有 Team → Squad 转型
+- 三人决策小组接管 ART 治理
+- 多 VS 全面运转，VS Lead 之间直接对接
+- <strong>激活 Portfolio 层</strong>：
+  - 建立价值流投资组合管理
+  - 上线 Lean Budget &amp; Guardrails
+  - 发布季度战略主题机制
+  - 部署 Portfolio 层 AI 应用（VS 评估、对齐扫描、依赖预警）
+- SM → Change Agent 全员转型
+- 共享平台升级为产品级
+- 建立内部 Skill 交易市场</p>
+<p><strong>成功标准（参考阈值）</strong>：
+- 所有 Squad / VS 上线
+- 整体产出显著提升（<strong>四层度量都达标</strong>，不只是 Squad 速度）
+- 客户满意度提升
+- Portfolio 决策周期从季度级缩短到月级</p>
+<h2 id="11" data-anchor="11">11. 角色转型与能力建设</h2>
+<h3 id="111">11.1 角色映射 <span class="inline-badge instance">Instance</span> 参考实例</h3>
+<blockquote>
+<p>三角色来自 PO、Dev、SM 铁三角在 AI 时代的极简进化，<strong>不是凭空新造</strong>。培养周期为<strong>参考范围</strong>，因人因 AI 工具成熟度而异。</p>
+<p><strong>注意</strong>：除了 Squad 层三角色，本表还包含 <strong>VS Lead / Portfolio Head / Change Agent 等组织层关键角色</strong>——这些角色对整体提效同样关键。</p>
+</blockquote>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>原角色</th>
+<th>新角色</th>
+<th>转型路径</th>
+<th>培养周期（参考）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PO / Senior BA</strong></td>
+<td><strong>AI Orchestrator</strong> (Squad 层)</td>
+<td>AI 编排能力 + Agent 流程设计培训</td>
+<td>2-4 个月</td>
+</tr>
+<tr>
+<td><strong>BA / 需求分析师 / Junior PO</strong></td>
+<td><strong>AI Orchestrator</strong> (Squad 层)</td>
+<td>需求 → AI 拆解 → 原型工作流培训</td>
+<td>3-5 个月</td>
+</tr>
+<tr>
+<td><strong>产品经理 / 资深 PO</strong></td>
+<td><strong>VS Lead</strong> (VS 层)</td>
+<td>端到端价值流管理 + VS 自治治理</td>
+<td>4-6 个月</td>
+</tr>
+<tr>
+<td><strong>Dev / 全栈工程师</strong></td>
+<td><strong>AI Engineer</strong> (Squad 层)</td>
+<td>Prompt 工程 + Agent/Skill 构建培训</td>
+<td>2-4 个月</td>
+</tr>
+<tr>
+<td><strong>Senior Dev / TL</strong></td>
+<td><strong>AI Engineer / Platform 团队</strong></td>
+<td>AI 工具深度 + 共享平台建设</td>
+<td>3-5 个月</td>
+</tr>
+<tr>
+<td><strong>SM / 敏捷教练 / QA Lead / SQA / 质量工程师</strong></td>
+<td><strong>Harness Master</strong> (Squad 层)</td>
+<td>流程管理 + 质量治理 + 过程护栏 + Gate/Reporting 设计培训</td>
+<td>3-5 个月</td>
+</tr>
+<tr>
+<td><strong>Junior Dev / QA</strong></td>
+<td><strong>Squad 成员 / 专家池</strong></td>
+<td>AI 协作基础能力培训</td>
+<td>1-3 个月</td>
+</tr>
+<tr>
+<td><strong>SM</strong></td>
+<td><strong>Change Agent</strong> (跨层)</td>
+<td>跨 Squad / 跨 VS 变革管理</td>
+<td>3-6 个月</td>
+</tr>
+<tr>
+<td><strong>RTE</strong></td>
+<td><strong>RTE (ART 三人决策小组)</strong></td>
+<td>AI 辅助跨 VS 协同 + 数据驱动决策</td>
+<td>2-4 个月</td>
+</tr>
+<tr>
+<td><strong>架构师</strong></td>
+<td><strong>Enterprise AI (ART 决策小组)</strong></td>
+<td>AI 战略 + 共享平台演进</td>
+<td>3-6 个月</td>
+</tr>
+<tr>
+<td><strong>数字化负责人</strong></td>
+<td><strong>Portfolio Head (Portfolio 层)</strong></td>
+<td>价值流投资组合管理 + Lean Budget</td>
+<td>4-6 个月</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h4 id="1111-ai">11.1.1 AI 时代五类新岗位（外部理论参考）</h4>
+<p>《AI 软件工程范式革命》提出，随着 AI 产线成熟，会出现五类新岗位。这些岗位不是替代现有角色，而是<strong>现有角色任务结构被重写后的自然演化</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>新岗位</th>
+<th>核心职能</th>
+<th>与现有角色的映射</th>
+<th>在本框架中的对应</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AI 产线架构师</strong></td>
+<td>设计端到端 AI 产线、定义分治结构、选择节点边界</td>
+<td>架构师 + 技术负责人</td>
+<td><strong>Enterprise AI</strong>（ART 决策小组）+ <strong>AI Engineer</strong>（Squad 层）</td>
+</tr>
+<tr>
+<td><strong>认知 SOP 工程师</strong></td>
+<td>把隐性经验转化为可复用的 Prompt、Rules、Checklist、Blueprint</td>
+<td>资深工程师 + 技术写作者</td>
+<td><strong>AI Engineer</strong> 的 Skill 构建职责</td>
+</tr>
+<tr>
+<td><strong>偏差检测工程师</strong></td>
+<td>主动构造极端案例、反例、对抗测试，发现 AI 产线的盲区</td>
+<td>测试工程师 + 安全工程师</td>
+<td><strong>Harness Master</strong> 的 Risk Left Shift 职责</td>
+</tr>
+<tr>
+<td><strong>AI 产线调优师</strong></td>
+<td>监控产线良率、调优 Agent 参数、优化上下文窗口使用</td>
+<td>SRE + 性能工程师</td>
+<td><strong>AI Engineer</strong> 的 Agent 调优职责</td>
+</tr>
+<tr>
+<td><strong>认知边界守卫</strong></td>
+<td>判断 AI 能力边界、决定何时必须人工介入、处理例外场景</td>
+<td>资深架构师 + 产品经理</td>
+<td><strong>Harness Master</strong> 的专家性裁判 + <strong>AI Orchestrator</strong> 的价值判断</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>关键判断</strong>：这些新岗位不是凭空创造的职称，而是现有角色在 AI 产线中的任务重组。本框架的三角色模型（AI Orchestrator / AI Engineer / Harness Master）已经覆盖了这五类职能的核心分工——只是具体任务比例和称谓会因组织而异。</p>
+</blockquote>
+<h3 id="112">11.2 能力建设三层</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Level 1: AI Literacy（全员）
+├─ Prompt 基础
+├─ AI 工具使用
+└─ AI 输出审查
+
+Level 2: AI Practice（Squad 成员）
+├─ Agent 编排
+├─ Blueprint 设计
+├─ Rules 编写
+└─ 5 天交付节奏
+
+Level 3: AI Architecture（核心骨干）
+├─ Skill 库与最佳实践维护
+├─ 跨 Squad 经验提炼
+└─ 平台演进决策
+</code></pre></div>
+<h3 id="113">11.3 不裁员承诺</h3>
+<blockquote>
+<p><strong>明确写入变革宪章</strong>：本次重组不裁员。所有现有员工通过 1-6 个月培训转型到新角色。
+这是"增效不降本"理念的硬约束，也是变革成功的前提。</p>
+</blockquote>
+<h2 id="12" data-anchor="12">12. 风险与应对</h2>
+<blockquote>
+<p><strong><span class="inline-badge instance">Instance</span> 注意</strong>：风险按"四层提效"分类，每层都有独特的风险点，不应只关注 Squad 层。</p>
+</blockquote>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>风险</th>
+<th>概率</th>
+<th>影响</th>
+<th>应对</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Portfolio</strong></td>
+<td>战略主题滞后，VS 做错的事</td>
+<td>中</td>
+<td>极高</td>
+<td>季度战略评审 + AI 实时对齐扫描</td>
+</tr>
+<tr>
+<td><strong>Portfolio</strong></td>
+<td>资源分配靠政治博弈</td>
+<td>高</td>
+<td>高</td>
+<td>Lean Budget 数据驱动 + 透明 VS 投资组合</td>
+</tr>
+<tr>
+<td><strong>ART</strong></td>
+<td>跨 VS 依赖阻塞</td>
+<td>高</td>
+<td>高</td>
+<td>依赖矩阵公开 + VS Lead 直接对接 + AI 依赖预警</td>
+</tr>
+<tr>
+<td><strong>ART</strong></td>
+<td>共享平台后置导致 N 套工具</td>
+<td>中</td>
+<td>高</td>
+<td>Phase 1 优先投入平台基础设施</td>
+</tr>
+<tr>
+<td><strong>VS</strong></td>
+<td>VS 假自治，仍需上级批</td>
+<td>高</td>
+<td>中</td>
+<td>三人决策小组不干预 VS 内决策</td>
+</tr>
+<tr>
+<td><strong>VS</strong></td>
+<td>活动度量取代价值度量</td>
+<td>中</td>
+<td>高</td>
+<td>强制使用 Lead Time / Flow Efficiency</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>AI 代码质量不达标</td>
+<td>中</td>
+<td>高</td>
+<td>Harness Master 多阶段质量门 + Compounding 改进</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>团队成员不适应</td>
+<td>中</td>
+<td>中</td>
+<td>渐进培训 + 心理支持 + Pilot Squad 示范</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>Squad 内部冲突</td>
+<td>中</td>
+<td>中</td>
+<td>三层平衡框架 + 多维度排名</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>中层管理者抵触</td>
+<td>高</td>
+<td>高</td>
+<td>早期沟通 + 转型为 VS Lead/Change Agent</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>与现有 SAFe 冲突</td>
+<td>高</td>
+<td>中</td>
+<td>三人决策小组对接，平滑过渡</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>重复造轮子</td>
+<td>中</td>
+<td>中</td>
+<td>强制 Skill 开源 + 原子币激励</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>只优化 Squad，整体不提效</td>
+<td>高</td>
+<td>极高</td>
+<td><strong>强制四层度量同步评审，Portfolio 优先</strong></td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>测试 Oracle / 自证循环</td>
+<td>中</td>
+<td>高</td>
+<td>Harness Master 设计对抗测试 + 人工抽检关键场景；AI 写测试 + AI 跑测试的闭环必须由独立裁判校验</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>模型供应商锁定</td>
+<td>中</td>
+<td>高</td>
+<td>设计模型可替换性（多模型 fallback）、工具协议标准化、上下文资产可迁移、内部 Benchmark 自有化</td>
+</tr>
+<tr>
+<td><strong>Squad</strong></td>
+<td>安全与供应链风险</td>
+<td>中</td>
+<td>高</td>
+<td>Harness Master 将 SAST、DAST、SCA、SBOM、Secret Scanning、License Scanning 纳入 Toolchain；定期 Red Team 演练</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>组织激励与权力再分配</td>
+<td>高</td>
+<td>高</td>
+<td>明确“增效不降本、不裁员”承诺；将 AI 产线贡献纳入绩效；中层管理者转型为 VS Lead / Change Agent</td>
+</tr>
+<tr>
+<td><strong>跨层</strong></td>
+<td>隐性知识无法沉淀</td>
+<td>中</td>
+<td>高</td>
+<td>建立“问题驱动”的 Skill 沉淀机制：不是写文档，而是“Agent 犯错 → 专家纠正 → 规则提取 → Blueprint 更新”的闭环</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h1 id="_6" data-anchor="_6">第五部分 · 框架可扩展性</h1>
+<h2 id="13" data-anchor="13">13. 内核、扩展点与实践注册表</h2>
+<blockquote>
+<p>本章是 v1.2 修订的核心新增内容。
+<strong>背景</strong>：技术迭代每周都在发生（新的 Anthropic 工程博客、新的 Claude 模型、新的 Coding Agent、新的开源工具）。如果架构紧耦合到具体技术，半年就过时。
+<strong>方案</strong>：把框架显式分成"内核（Core）"和"扩展点（Extension Points）"，新实践通过注册表机制接入，无需改动内核。</p>
+</blockquote>
+<h3 id="131">13.1 框架分层</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">┌─────────────────────────────────────────────────────────────┐
+│  层 1: <span class="inline-badge core">Core</span> 内核（Core）— 年度级稳定                          │
+├─────────────────────────────────────────────────────────────┤
+│  • 三角色分工逻辑（业务编排/技术执行/质量约束）              │
+│  • 人机协作哲学（Human-in-the-Loop）                         │
+│  • 六个共同基因（研究即工程/透明/去中介化/Dogfooding/简单优 │
+│    先/质量信仰）                                              │
+│  • 三个架构原则（ACI-First/Compounding Dogfooding/          │
+│    Zero-Meeting Default）                                    │
+│  • 三层组织协作框架（结构性/市场化/文化性）                  │
+│  • 三阶段递进结构（种子→复制→规模化）                       │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ 通过明确的扩展点连接
+┌─────────────────────────────────────────────────────────────┐
+│  层 2: <span class="inline-badge instance">Instance</span> 扩展点（Extension Points）— 月度级更新             │
+├─────────────────────────────────────────────────────────────┤
+│  • Agent 池组成 — 新 Agent 可以注册接入                      │
+│  • Workflow 模式 — 新的协作模式可以纳入                      │
+│  • 对标公司案例 — 新公司实践可以补充                         │
+│  • 质量门设计 — 新的质量规则可以增加                         │
+│  • 工具链选型 — 新工具可以替代旧工具                         │
+│  • 角色技能比例 — 随 Agent 能力演化可调                      │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ 通过注册表机制管理
+┌─────────────────────────────────────────────────────────────┐
+│  层 3: <span class="inline-badge instance">Instance</span> 实例（Instances）— 周/日级演化                     │
+├─────────────────────────────────────────────────────────────┤
+│  • 具体 Squad 数量、人员配置                                  │
+│  • 具体 Story 周期长度                                        │
+│  • 具体 Agent 选型（Claude/GPT/Gemini/...）                  │
+│  • 具体 IDE 工具（Cursor/Copilot/Windsurf/...）              │
+│  • 具体绩效指标和阈值                                         │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="132">13.2 扩展点清单与接入方式</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>扩展点</th>
+<th>当前实例（2026 Q2）</th>
+<th>接入新实践的方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Agent 池</strong></td>
+<td>6 类基础 Agent</td>
+<td>通过 Squad Workspace 注册新 Agent，定义 Blueprint</td>
+</tr>
+<tr>
+<td><strong>Workflow 模式</strong></td>
+<td>Anthropic 5 种模式</td>
+<td>新模式提 PR 到内部 Pattern Library，社区评审后纳入</td>
+</tr>
+<tr>
+<td><strong>对标案例</strong></td>
+<td>10 家公司</td>
+<td>新案例通过附录 F 模板提交，Change Agent 审核合入</td>
+</tr>
+<tr>
+<td><strong>质量门</strong></td>
+<td>Harness Master 设计的多阶段门</td>
+<td>Harness Master 跨 Squad 同步会议每月迭代</td>
+</tr>
+<tr>
+<td><strong>工具链</strong></td>
+<td>当前主流 AI IDE/平台</td>
+<td>工具基线由 AI Engineer 群体季度评审更新</td>
+</tr>
+<tr>
+<td><strong>绩效指标</strong></td>
+<td>当前参考阈值</td>
+<td>Pilot 验证后调整，每 PI 复盘修订</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="133">13.3 新实践接入流程</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">新实践出现（如新 Anthropic 博客、新工具、新框架）
+    ↓
+[1] 任何 Squad 成员可发起&quot;接入提案&quot;
+    ↓
+[2] 填写&quot;实践注册表条目&quot;（模板见附录 F）
+    - 来源、核心机制、与现有内核的兼容性、试点 Squad、成功标准
+    ↓
+[3] 三人决策小组评审（30 分钟）
+    - 是否与内核冲突？
+    - 是否需要升级为新内核原则？
+    - 由哪个 Squad 试点？
+    ↓
+[4] Pilot Squad 试点（1 个周期）
+    ↓
+[5] 试点成功 → 进入&quot;推荐实例库&quot;
+    试点失败 → 归档到&quot;已尝试清单&quot;
+    ↓
+[6] 经过 2-3 个 Squad 验证后 → 纳入下个 PI 的标准实例
+</code></pre></div>
+<h3 id="134">13.4 原则升级路径</h3>
+<p>当某个新实践在多个 Squad 反复出现且效果显著时，可升级为新的内核原则：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">实例（单 Squad 验证）
+    ↓ 多 Squad 复制成功
+推荐实例（写入对标参考）
+    ↓ 跨行业普遍出现（≥3 家先进公司）
+候选原则（写入观察清单）
+    ↓ 持续 2 个 PI 稳定有效
+内核原则（写入第 8.3 章）
+</code></pre></div>
+<p>举例：当前的"ACI-First"、"Compounding Dogfooding"、"Zero-Meeting Default"三原则就是通过这条路径从公司实践提炼出来的。未来可能新增的候选原则（举例，仅供参考）：
+- "Agent-as-Code"：把 Agent 当代码管理（版本/Review/CI）
+- "Spec-Driven Development"：以可验证规范驱动 AI 生成
+- "Capability Composition"：通过组合现有 Agent 能力而非新造</p>
+<h3 id="135">13.5 弃用机制</h3>
+<p>实践有保鲜期。框架同样需要弃用机制，避免技术债。</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">实例（active）→ 实例（deprecated）→ 实例（removed）
+</code></pre></div>
+<ul>
+<li>任何 Squad 可标记某个实例为"deprecated"，并说明原因</li>
+<li>一个 PI 内若无 Squad 反对，进入"removed"</li>
+<li>内核原则的弃用需要更严格的论证（详见附录 F）</li>
+</ul>
+<h3 id="136">13.6 这一章本身的"内核"</h3>
+<blockquote>
+<p>即使本章描述的注册表机制、阶段流程、模板格式都可能演化，<strong>其底层哲学</strong>是稳定的：</p>
+<p><strong>任何足够长寿命的框架，都必须把"什么变"与"什么不变"显式分开。</strong></p>
+<p>内核解决"组织如何在 AI 时代有效运转"——这是慢变量；
+扩展点解决"今天用哪个工具、哪个模式、哪个案例"——这是快变量。</p>
+<p>把两者混在一起，框架要么三个月过时，要么寸步难行。</p>
+</blockquote>
+<hr />
+<h1 id="_7" data-anchor="_7">第六部分 · 评审与落地校准</h1>
+<h2 id="14-stakeholder" data-anchor="14-stakeholder">14. Stakeholder 评审包</h2>
+<blockquote>
+<p>目标不是一次性批准完整重组，而是先对齐“是否值得进入 Pilot 验证”。评审应聚焦四层假设，而不是讨论某个 Squad 的组织细节。</p>
+</blockquote>
+<h3 id="141">14.1 评审对象与核心问题</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Stakeholder</th>
+<th>最关心的问题</th>
+<th>需要给出的判断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Portfolio / 数字化负责人</td>
+<td>这是否服务于当前战略主题？</td>
+<td>是否允许进入 Pilot，并给出业务价值假设</td>
+</tr>
+<tr>
+<td>Business Owner</td>
+<td>是否真的更快产生客户/业务价值？</td>
+<td>是否愿意提供试点场景和反馈窗口</td>
+</tr>
+<tr>
+<td>RTE / ART 管理者</td>
+<td>是否破坏现有 PI 节奏？</td>
+<td>是否接受渐进式双轨运行</td>
+</tr>
+<tr>
+<td>VS Lead / PO / BA</td>
+<td>角色是否被削弱或替代？</td>
+<td>是否接受 AI Orchestrator 是现有 PO 能力升级</td>
+</tr>
+<tr>
+<td>Dev / TL / Architect</td>
+<td>技术质量和架构一致性如何保证？</td>
+<td>是否认可 AI Engineer + Platform 的质量边界</td>
+</tr>
+<tr>
+<td>QA Lead / SQA / SM</td>
+<td>SM 和 QA 是否被误解？</td>
+<td>是否认可 Harness Master 是 SM+QA 在 AI 时代的融合角色——流程管理+质量治理双肩挑，而非传统 tester 或看板协调员的替代称呼</td>
+</tr>
+<tr>
+<td>HR / People Partner</td>
+<td>是否涉及裁员或岗位风险？</td>
+<td>是否确认“增效不降本、不裁员”的变革承诺</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="142-90">14.2 90 分钟评审议程</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>主题</th>
+<th>输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0-10 min</td>
+<td>为什么现在讨论 AI 原生交付</td>
+<td>对齐问题背景</td>
+</tr>
+<tr>
+<td>10-25 min</td>
+<td>四层提效模型：Squad / VS / ART / Portfolio</td>
+<td>对齐“不能只优化 Squad”</td>
+</tr>
+<tr>
+<td>25-40 min</td>
+<td>三角色模型：PO、Dev、SM 铁三角的 AI 极简版</td>
+<td>消除“新造岗位/替代人”的误解</td>
+</tr>
+<tr>
+<td>40-55 min</td>
+<td>Pilot 候选场景与评分卡</td>
+<td>选出 1-2 个候选方向</td>
+</tr>
+<tr>
+<td>55-70 min</td>
+<td>四层度量基线与退出条件</td>
+<td>明确如何证明有效/无效</td>
+</tr>
+<tr>
+<td>70-85 min</td>
+<td>风险、依赖、治理边界</td>
+<td>明确谁拍板、谁参与、谁不被打扰</td>
+</tr>
+<tr>
+<td>85-90 min</td>
+<td>决策</td>
+<td>Go / No-Go / Defer</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h3 id="143">14.3 评审必须避免的三类偏差</h3>
+<ol>
+<li><strong>把 Pilot 讨论成组织大重组</strong>：Phase 1 只验证一个场景，不改变全 ART 组织结构。</li>
+<li><strong>只讨论工具，不讨论价值流</strong>：工具选型属于实例层，评审重点是四层假设是否成立。</li>
+<li><strong>把 AI 原生误读成裁员叙事</strong>：本框架的硬约束是增效不降本、不裁员。</li>
+</ol>
+<h2 id="15-pilot" data-anchor="15-pilot">15. Pilot 选择评分卡</h2>
+<p>Pilot 场景要满足两个条件：一是足够真实，能证明价值；二是足够可控，不会把组织风险一次性放大。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>权重</th>
+<th>高分特征</th>
+<th>低分特征</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>业务价值</td>
+<td>25%</td>
+<td>与当前战略主题直接相关，业务方愿意快速反馈</td>
+<td>只是内部效率优化，业务价值难衡量</td>
+</tr>
+<tr>
+<td>端到端可交付性</td>
+<td>20%</td>
+<td>可在一个 VS 内闭环交付，依赖少</td>
+<td>跨多个 VS / 外部系统依赖重</td>
+</tr>
+<tr>
+<td>需求可拆解性</td>
+<td>15%</td>
+<td>可拆成多个小 Story，适合短周期验证</td>
+<td>需求高度不确定或需要长期探索</td>
+</tr>
+<tr>
+<td>技术风险可控</td>
+<td>15%</td>
+<td>架构边界清晰，有测试环境和回滚路径</td>
+<td>涉及核心交易链路、合规高风险</td>
+</tr>
+<tr>
+<td>数据与质量可观测</td>
+<td>10%</td>
+<td>Cycle Time、缺陷、业务结果可度量</td>
+<td>数据缺失，结果只能靠主观判断</td>
+</tr>
+<tr>
+<td>团队意愿</td>
+<td>10%</td>
+<td>PO/Dev/QA 均愿意参与并承担反馈</td>
+<td>团队抗拒，Pilot 会变成额外负担</td>
+</tr>
+<tr>
+<td>复用潜力</td>
+<td>5%</td>
+<td>产出的 Skill / Blueprint 可扩散到其他 Squad</td>
+<td>一次性特殊场景，难以复用</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<p><strong>推荐门槛</strong>：总分 ≥ 75 分进入 Pilot；60-74 分需要补齐前置条件；&lt; 60 分不建议作为 Phase 1。</p>
+<h3 id="151">15.1 推荐优先级</h3>
+<ol>
+<li><strong>优先选择一个高价值但中等复杂度的 VS 内场景</strong>：能证明端到端流动提效。</li>
+<li><strong>避免第一个 Pilot 选择跨 VS 强依赖场景</strong>：否则会把 ART/Portfolio 层未成熟问题误判为 Squad 模型失败。</li>
+<li><strong>避免纯技术重构场景</strong>：容易证明开发效率，但难证明业务价值。</li>
+</ol>
+<h2 id="16" data-anchor="16">16. 四层度量基线与决策门</h2>
+<h3 id="161">16.1 四层度量基线</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层级</th>
+<th>核心假设</th>
+<th>基线指标</th>
+<th>Pilot 期观察指标</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Portfolio</td>
+<td>做对的事比做得快更重要</td>
+<td>战略主题覆盖率、价值/投入比、决策周期</td>
+<td>Pilot 是否服务明确战略主题，是否有业务方价值反馈</td>
+</tr>
+<tr>
+<td>ART</td>
+<td>多 VS 协同不能成为瓶颈</td>
+<td>跨 VS 依赖数量、依赖等待时间、PI 风险项</td>
+<td>是否出现因治理不清造成的等待或返工</td>
+</tr>
+<tr>
+<td>Value Stream</td>
+<td>价值端到端流动速度提升</td>
+<td>Lead Time、Flow Efficiency、等待时间占比</td>
+<td>从想法到验证的总周期是否缩短</td>
+</tr>
+<tr>
+<td>Squad</td>
+<td>单个交付单元产出被 AI 放大</td>
+<td>Story Cycle Time、AI 采纳率、缺陷逃逸率、复用资产数</td>
+<td>3 人 + N Agent 是否稳定交付并沉淀 Skill</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="162-phase-1">16.2 Phase 1 决策门</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>决策门</th>
+<th>进入条件</th>
+<th>退出判断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gate 0: 进入 Pilot</td>
+<td>评分卡 ≥ 75；业务方愿意参与；PO/Dev/QA 候选人明确</td>
+<td>Go / 补条件 / 放弃</td>
+</tr>
+<tr>
+<td>Gate 1: 第一个 Story 完成</td>
+<td>完成需求拆解、Agent 流程、质量门定义</td>
+<td>是否能在短周期内形成可验证产物</td>
+</tr>
+<tr>
+<td>Gate 2: 一个小周期结束</td>
+<td>至少交付 2-3 个 Story，并记录人工/AI 协作过程</td>
+<td>是否继续扩大到同一 VS 内更多场景</td>
+</tr>
+<tr>
+<td>Gate 3: Pilot 复盘</td>
+<td>四层指标有数据，stakeholder 完成复盘</td>
+<td>Promote / Iterate / Archive</td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h3 id="163">16.3 失败也有价值</h3>
+<p>如果 Pilot 失败，需要判断失败位置：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>失败位置</th>
+<th>含义</th>
+<th>下一步</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Portfolio 假设失败</td>
+<td>选错业务价值方向</td>
+<td>更换业务场景，不否定 Squad 模型</td>
+</tr>
+<tr>
+<td>ART 协同失败</td>
+<td>依赖/治理阻塞</td>
+<td>先补 ART 层机制，再扩大 Pilot</td>
+</tr>
+<tr>
+<td>VS 流动失败</td>
+<td>端到端流程仍有等待</td>
+<td>聚焦 Flow Efficiency，而不是继续加速开发</td>
+</tr>
+<tr>
+<td>Squad 执行失败</td>
+<td>3 人 + N Agent 协作未成熟</td>
+<td>回到能力建设和工具链调试</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h1 id="_8" data-anchor="_8">第七部分 · 附录</h1>
+<h2 id="a" data-anchor="a">A. 关联报告索引</h2>
+<p>本整合报告基于以下子报告，按对正文贡献度排序：</p>
+<ol>
+<li>
+<p><strong><a href="./ART原子化重组规划方案——基于德勤GDC经验.md">ART 原子化重组规划方案——基于德勤 GDC 经验</a></strong>
+   - 完整重组规划，13 章，含角色模型、Value Stream 重组、Change Management Roadmap</p>
+</li>
+<li>
+<p><strong><a href="./人机混合原子小队架构设计——增效不降本的AI原生交付模式.md">人机混合原子小队架构设计——增效不降本的 AI 原生交付模式</a></strong>
+   - 三角色核心定位、Agent 池配置、一天工作流程</p>
+</li>
+<li>
+<p><strong><a href="./先进科技公司案例对比——Anthropic_DeepSeek_字节飞书.md">先进科技公司案例对比——Anthropic_DeepSeek_字节飞书</a></strong>
+   - 10 家公司实践对标，6 个共同基因，3 个新原则</p>
+</li>
+<li>
+<p><strong><a href="./赛马机制与团队合作平衡分析——原子小队架构的内生张力与解法.md">赛马机制与团队合作平衡分析——原子小队架构的内生张力与解法</a></strong>
+   - 韩都/海尔/蒙德拉贡/Spotify 四原型，三层平衡框架，原子币设计</p>
+</li>
+<li>
+<p><strong><a href="./AI转型项目优化建议v2——基于德勤GDC经验与三阶段路线图对比.md">AI 转型项目优化建议 v2——基于德勤 GDC 经验与三阶段路线图对比</a></strong>
+   - Porsche AI 三阶段战略（Assistant→Augmented→Native）与德勤经验对标</p>
+</li>
+</ol>
+<blockquote>
+<p><strong>关于 POMASA 分析报告的说明</strong>：之前的 <a href="./ART重组方案_POMASA架构分析报告.md">ART 重组方案_POMASA 架构分析报告</a> 曾尝试用 POMASA 的 20 个模式扫描组织设计方案。在 v1.0 修订中，作者判断该尝试存在<strong>领域错配</strong>——POMASA 是 LLM 知识工程的模式语言，其概念（Bounded Context 是上下文窗口、Shared Resource Pool 是向量库共享等）不适合直接迁移到组织设计。因此该子报告不再作为正文支撑，但其作为"用 LLM 模式语言反思组织"的探索过程保留备查。POMASA 的真正用武之地见<a href="#e">附录 E</a>。</p>
+</blockquote>
+<h2 id="b" data-anchor="b">B. 核心数据来源</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>来源</th>
+<th>用途</th>
+<th>路径/链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>德勤 GDC 参访会议纪要（2026-05-08）</td>
+<td>三角色模型、Harness Master 等核心实践原型</td>
+<td><code>reports/2026-05-08-德勤重庆GDC参访-AI转型与应用.md</code></td>
+</tr>
+<tr>
+<td>《AI 软件工程范式革命》原文与评论</td>
+<td>闭环优先方法论、三类裁判系统、隐性知识蒸馏、五类新岗位</td>
+<td><code>Reference/ai_software_engineering_paradigm_review.md</code></td>
+</tr>
+<tr>
+<td>Anthropic Building Effective Agents</td>
+<td>Workflow→Agent 渐进框架、ACI 原则</td>
+<td>https://www.anthropic.com/engineering/building-effective-agents</td>
+</tr>
+<tr>
+<td>Anthropic <em>Equipping agents for the real world with Agent Skills</em> (2026-05)</td>
+<td>Skill 渐进式架构、评估驱动开发、recon→find→verify→report→patch 管道</td>
+<td>https://anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills</td>
+</tr>
+<tr>
+<td>Anthropic GitHub: <code>anthropics/skills</code></td>
+<td>Skill 目录结构、Progressive Disclosure、Eval-Driven Development、Black-Box Scripts</td>
+<td>https://github.com/anthropics/skills</td>
+</tr>
+<tr>
+<td>Anthropic GitHub: <code>anthropics/defending-code-reference-harness</code></td>
+<td>管道化自主执行、两容器信任边界、gVisor 沙箱、验证阶梯</td>
+<td>https://github.com/anthropics/defending-code-reference-harness</td>
+</tr>
+<tr>
+<td>Anthropic <em>Effective harnesses for long-running agents</em> (2025-11)</td>
+<td>初始化-执行分离、特性清单驱动、清洁交接、一次一件事+端到端验证</td>
+<td>https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</td>
+</tr>
+<tr>
+<td>Anthropic <em>How we built Claude Code auto mode</em> (2026-03)</td>
+<td>分级信任边界、拒绝-重试、多 Agent 交接安全</td>
+<td>https://www.anthropic.com/engineering/claude-code-auto-mode</td>
+</tr>
+<tr>
+<td>新型生产关系研究报告</td>
+<td>蒙德拉贡/海尔/韩都衣舍内部市场化模型</td>
+<td>项目根目录 <code>新型生产关系-企业转型研究报告.md</code></td>
+</tr>
+<tr>
+<td>POMASA 论文</td>
+<td><strong>本报告生产</strong>的多智能体协作框架（非组织设计参考）</td>
+<td><code>Reference/A Pattern Language for Knowledge Engineering with Large Language Model.pdf</code></td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h2 id="c" data-anchor="c">C. 待补充内容</h2>
+<p>以下内容待后续补充：</p>
+<ul>
+<li>[x] Anthropic 工程博客与生产实践：已通过 GitHub 仓库（skills、claude-code、defending-code-reference-harness）补充到第 9.4 节</li>
+<li>[x] Anthropic 长时运行 Agent 与 auto mode 工程博客：已补充 Effective Harnesses、Claude Code Auto Mode 到第 9.4 节 Pattern 7-12 和附录 B</li>
+<li>[ ] Anthropic 其他工程博客：Scaling Managed Agents、Context Engineering、C Compiler with Parallel Claudes（如获取到完整内容，通过实践注册表接入）</li>
+<li>[ ] DeepSeek 团队详细数据：arXiv V3 论文、梁文锋采访</li>
+<li>[ ] 字节/飞书行业大会演讲：QCon、ArchSummit</li>
+<li>[ ] 中文科技媒体近期文章：赛博禅心、新智元、机器之心、AGI Hunt、InfoQ</li>
+<li>[ ] 中国 AI 独角兽组织实践：月之暗面、智谱、MiniMax、零一万物</li>
+</ul>
+<h2 id="d" data-anchor="d">D. 关键术语表</h2>
+<ul>
+<li><strong>ART</strong>：Agile Release Train，敏捷发布列车（SAFe 框架）</li>
+<li><strong>VS</strong>：Value Stream，价值流</li>
+<li><strong>PI</strong>：Program Increment，项目增量（通常 10 周）</li>
+<li><strong>Squad</strong>：原子小队（3 人 + N Agent）</li>
+<li><strong>Agent</strong>：AI 智能体</li>
+<li><strong>Blueprint</strong>：Agent 工作蓝图（含 Prompt、Tool、Rules）</li>
+<li><strong>ACI</strong>：Agent-Computer Interface，智能体-工具接口</li>
+<li><strong>Harness Master</strong>：SM 在 AI 时代的拓展角色——流程管理与质量治理双肩挑，负责交付节奏、流程护栏、质量原则、Guardrails、Gate Control、质量报告与 AI 验证体系设计</li>
+<li><strong>AI Orchestrator</strong>：PO 在 AI 时代的拓展角色，负责需求理解、价值定义、Agent 流程编排</li>
+<li><strong>AI Engineer</strong>：实现工程师，负责 Agent/Skill 的技术配置与构建、Prompt 工程、AI 代码质量</li>
+<li><strong>Orchestrator</strong>：编排者，原子小队中的需求/价值角色（即 AI Orchestrator 简称）</li>
+<li><strong>Skill</strong>：可复用的 Agent 能力模块</li>
+<li><strong>原子币</strong>：内部积分系统，激励 Skill 共享</li>
+<li><strong>POMASA</strong>：Pattern Language for Knowledge Engineering with LLM，LLM 知识工程的模式语言。本报告中<strong>仅作为多智能体协作生产流程的框架</strong>使用，不作为组织设计的理论参考。</li>
+<li><strong>内核（Core）</strong>：框架中稳定不变的部分（设计原则、角色分工、协作哲学）。年度级变化频率。</li>
+<li><strong>扩展点（Extension Point）</strong>：框架内核与具体实践之间的连接界面，新实践通过扩展点接入。</li>
+<li><strong>实例（Instance）</strong>：当前技术条件下的具体配置（Agent 选型、周期长度、案例参考）。月/周级变化频率。</li>
+<li><strong>实践注册表</strong>：管理新实践接入、试点、晋升、弃用的标准化机制（见附录 F）。</li>
+<li><strong>四层提效模型</strong>：Squad（局部）→ VS（流动）→ ART（协同）→ Portfolio（战略）的层级提效框架（见第 3.1 节）。</li>
+<li><strong>流动效率（Flow Efficiency）</strong>：价值时间 ÷ 总周期时间。VS 层核心度量。</li>
+<li><strong>Lean Budget</strong>：放弃项目预算，采用"价值流持续预算 + 护栏"的 Portfolio 资源分配模式（见第 7.2 节）。</li>
+<li><strong>战略主题</strong>：Portfolio 层每季度发布的 3-5 个核心方向，对齐所有 VS（见第 7.2 节）。</li>
+<li><strong>价值假设</strong>：每个 Epic 启动前必须明确的业务假设，2 周内做最小验证。</li>
+<li><strong>VS Lead</strong>：Value Stream 的端到端负责人，对业务结果负责，<strong>不是老 PM 的换皮</strong>（见第 6.2 节）。</li>
+<li><strong>Portfolio Head</strong>：价值流投资组合的总指挥，负责跨 VS 资源调度与战略主题对齐（见第 7.3 节）。</li>
+</ul>
+<h2 id="e" data-anchor="e">E. 报告生产的多智能体协作过程</h2>
+<p>本附录解释 POMASA 在本报告<strong>生产过程中</strong>扮演的角色——它是"如何用多个 Claude Agent 协作写出这份报告"的框架，而不是"如何设计 Porsche ART 组织"的框架。这一区分至关重要，避免领域错配。</p>
+<h3 id="e1-pomasa">E.1 为什么 POMASA 不适合做组织设计参考</h3>
+<p>POMASA 是 Anthropic 等团队总结的、<strong>面向 LLM 知识工程系统</strong>的模式语言。其 20 个模式都是围绕"如何让 LLM Agent 群体可靠地完成知识工作"设计的。直接迁移到人类组织设计会产生概念错配：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>POMASA 原意（LLM 工程语境）</th>
+<th>误用为组织设计时的错配</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Bounded Context</strong> = LLM 的上下文窗口边界（token 限制）</td>
+<td>误读为"组织边界"或"领域边界"（DDD 概念）</td>
+</tr>
+<tr>
+<td><strong>Shared Resource Pool</strong> = 向量库/工具/Prompt 库的共享</td>
+<td>误读为"人员专家池"</td>
+</tr>
+<tr>
+<td><strong>Hierarchical Composition</strong> = LLM 调用链的层级编排</td>
+<td>误读为"组织汇报层级"</td>
+</tr>
+<tr>
+<td><strong>Faithful Blueprint</strong> = Prompt 模板的忠实实例化</td>
+<td>误读为"组织角色定义模板"</td>
+</tr>
+<tr>
+<td><strong>Multi-Layer Validation</strong> = LLM 输出的多层校验</td>
+<td>误读为"人工质量门"</td>
+</tr>
+</tbody>
+</table></div>
+<p>这些误读会让组织设计建议<strong>显得有理论支撑但实际是循环论证</strong>——拿 LLM 工程模式套到组织上，再用"符合 POMASA"反向论证组织设计的正确性。这是方法论错误。</p>
+<h3 id="e2-pomasa">E.2 POMASA 在本报告生产中的真正用法</h3>
+<p>本报告由作者 + 多个 Claude Agent 协作产出，协作流程借鉴了 POMASA 的若干模式：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">本报告生产流程的多智能体协作图
+
+┌──────────────────────────────────────────────────────────────┐
+│  作者（人类 Orchestrator）                                    │
+│  • 定义问题、给出判断、拒绝错误方向                            │
+└────────────┬─────────────────────────────────────────────────┘
+             │
+             ↓ 任务分发
+┌──────────────────────────────────────────────────────────────┐
+│  Claude Agent 群（并行 + 串行）                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │ Research     │  │ Research     │  │ Research     │       │
+│  │ Agent A      │  │ Agent B      │  │ Agent C      │       │
+│  │ (Anthropic)  │  │ (DeepSeek)   │  │ (字节飞书)   │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
+│         │ 并行执行         │                  │              │
+│         └────────┬─────────┴──────────────────┘              │
+│                  ↓                                            │
+│  ┌──────────────────────────────────────────┐                │
+│  │ Synthesis Agent (Claude in main session) │                │
+│  │ • 整合多源信息                            │                │
+│  │ • 检测矛盾、标注未验证内容                 │                │
+│  └────────────────────┬─────────────────────┘                │
+└─────────────────────────┼─────────────────────────────────────┘
+                          ↓
+                  作者最终判断 → 写入报告
+</code></pre></div>
+<h3 id="e3-pomasa">E.3 借鉴的 POMASA 模式（仅用于报告生产）</h3>
+<p>以下模式确实在<strong>本报告的生产过程</strong>中起到了作用，而非在组织设计中：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>POMASA 模式</th>
+<th>在本报告生产中的应用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Iterative Refinement</strong></td>
+<td>报告 v1→v2 三次大改，每次根据作者反馈重写</td>
+</tr>
+<tr>
+<td><strong>Multi-Layer Validation</strong></td>
+<td>Agent 抓取→交叉验证→作者审查，每层都过滤</td>
+</tr>
+<tr>
+<td><strong>Human-in-the-Loop</strong></td>
+<td>关键判断（如"POMASA 不适合做组织设计参考"）由作者做出</td>
+</tr>
+<tr>
+<td><strong>Bounded Context</strong></td>
+<td>每个 Research Agent 只负责 1-3 家公司，避免上下文超载</td>
+</tr>
+<tr>
+<td><strong>Traceable Decisions</strong></td>
+<td>每个引用标注来源链接/抓取状态，便于审计</td>
+</tr>
+<tr>
+<td><strong>Asynchronous Collaboration</strong></td>
+<td>多个 Agent 并行后台运行，主对话不阻塞</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="e4">E.4 一个具体的例子：本次修订本身</h3>
+<p><strong>触发</strong>：作者指出"POMASA 不适合迁移到组织设计"。</p>
+<p><strong>多智能体协作处理流程</strong>：
+1. 主 Claude Agent 接收反馈，扫描报告全文识别 POMASA 误用位置（11 处）
+2. 拆解为 4 类修改：摘要描述、目录结构、第 7 章删除、章节重编号、附录调整
+3. 逐条系统性修改，每条都说明 why（如"Bounded Context 在 POMASA 是上下文窗口，不是组织边界"）
+4. 新增本附录 E，把 POMASA 的真正用途讲清楚</p>
+<p><strong>作者角色</strong>：定义问题（"这个迁移逻辑是错的"）、给出方向（"移出正文，作为生产框架保留"）、做最终判断。</p>
+<p><strong>Agent 角色</strong>：执行扫描、识别、重写、章节重编号等机械性工作。</p>
+<p><strong>这就是 POMASA 在本报告中的正确用法</strong>——它是协作框架，不是组织设计模板。</p>
+<h2 id="f" data-anchor="f">F. 实践注册表模板</h2>
+<blockquote>
+<p>本附录提供"新实践接入"的标准化模板。
+凡是新出现的工具、模式、案例、原则，都通过本模板提交，由三人决策小组评审后纳入框架（流程见 <a href="#133">13.3 节</a>）。</p>
+</blockquote>
+<h3 id="f1">F.1 新实践注册条目模板</h3>
+<div class="code-wrapper"><div class="code-top"><span>yaml</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-yaml"># ---- 实践注册表条目 ----
+practice_id: PRAC-YYYY-NNN              # 自动生成
+title: &lt;实践名称&gt;
+type: agent | workflow | tool | case_study | principle
+status: proposed | piloting | active | deprecated | removed
+proposed_by: &lt;Squad 名/成员名&gt;
+proposed_date: YYYY-MM-DD
+
+# 来源（必填）
+source:
+  url: &lt;博客/论文/会议链接&gt;
+  organization: &lt;来源公司/团队&gt;
+  authors: [&lt;作者列表&gt;]
+
+# 核心描述（必填）
+description: |
+  &lt;2-3 段说明：这个实践是什么、解决什么问题、与现有内核的关系&gt;
+
+# 内核兼容性（必填）
+core_compatibility:
+  conflicts_with: []                    # 与哪些内核原则冲突
+  extends: []                           # 扩展哪些内核原则
+  net_effect: positive | neutral | breaking
+
+# 接入位置（必填）
+extension_point: |
+  Agent 池 | Workflow 模式 | 对标案例 | 质量门 | 工具链 | 绩效指标
+
+# 试点计划（必填）
+pilot:
+  squad: &lt;Pilot Squad 名&gt;
+  duration: &lt;周期数&gt;
+  success_criteria:
+    - &lt;可衡量的成功标准 1&gt;
+    - &lt;可衡量的成功标准 2&gt;
+  failure_criteria:
+    - &lt;清晰的失败回滚标准&gt;
+
+# 评审记录（由决策小组填写）
+review:
+  reviewers: []
+  decision: approve | reject | defer
+  decision_date: YYYY-MM-DD
+  rationale: |
+    &lt;决策理由&gt;
+
+# 试点后回顾（试点完成后填写）
+retrospective:
+  outcome: success | partial | failed
+  metrics: {}
+  lessons_learned: |
+    &lt;学到了什么&gt;
+  next_action: promote_to_standard | iterate | archive
+</code></pre></div>
+<h3 id="f2">F.2 实践状态机</h3>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">proposed
+   ↓ 决策小组评审
+approve → piloting
+   ↓ 试点周期结束
+   ├─ success → active（写入推荐实例库）
+   ├─ partial → iterate（进入下一轮试点）
+   └─ failed → archived（保留在已尝试清单）
+
+active
+   ↓ 任何 Squad 可发起弃用提案
+deprecated
+   ↓ 一个 PI 内无 Squad 反对
+removed（仅在文档历史中保留）
+</code></pre></div>
+<h3 id="f3-2026-q2">F.3 当前注册表样例（2026 Q2）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Title</th>
+<th>Type</th>
+<th>Status</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PRAC-2026-001</td>
+<td>Anthropic 5 种 Workflow 模式</td>
+<td>workflow</td>
+<td>active</td>
+<td><a href="https://www.anthropic.com/engineering/building-effective-agents">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-002</td>
+<td>ACI-First Design</td>
+<td>principle</td>
+<td>active</td>
+<td>Anthropic</td>
+</tr>
+<tr>
+<td>PRAC-2026-003</td>
+<td>Compounding Dogfooding</td>
+<td>principle</td>
+<td>active</td>
+<td>Cursor</td>
+</tr>
+<tr>
+<td>PRAC-2026-004</td>
+<td>Zero-Meeting Default</td>
+<td>principle</td>
+<td>active</td>
+<td>Linear</td>
+</tr>
+<tr>
+<td>PRAC-2026-005</td>
+<td>Context not Control</td>
+<td>principle</td>
+<td>active</td>
+<td>字节跳动</td>
+</tr>
+<tr>
+<td>PRAC-2026-006</td>
+<td>Unified Codebase</td>
+<td>case_study</td>
+<td>active</td>
+<td>OpenAI</td>
+</tr>
+<tr>
+<td>PRAC-2026-007</td>
+<td>Apollo Program 小团队</td>
+<td>case_study</td>
+<td>active</td>
+<td>DeepMind</td>
+</tr>
+<tr>
+<td>PRAC-2026-008</td>
+<td>初始化-执行分离（Setup-Execution Split）</td>
+<td>workflow</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-009</td>
+<td>特性清单驱动追踪（Feature-List-Driven Tracking）</td>
+<td>workflow</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-010</td>
+<td>会话间清洁交接（Clean-State Handoff）</td>
+<td>workflow</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-011</td>
+<td>一次一件事+端到端验证（One-at-a-Time + E2E）</td>
+<td>workflow</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-012</td>
+<td>分级操作信任边界（Tiered Trust Boundary）</td>
+<td>principle</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/claude-code-auto-mode">Anthropic Engineering</a></td>
+</tr>
+<tr>
+<td>PRAC-2026-013</td>
+<td>拒绝-重试而非中断（Deny-and-Continue）</td>
+<td>principle</td>
+<td>proposed</td>
+<td><a href="https://www.anthropic.com/engineering/claude-code-auto-mode">Anthropic Engineering</a></td>
+</tr>
+</tbody>
+</table><div class="chart-note">数字表格：适合在评审时扩展为柱状图或评分雷达图。</div></div>
+<h3 id="f4">F.4 注册表的存放位置</h3>
+<p>实际落地时，建议把注册表存放在：
+- <strong>Git 仓库</strong>：版本可控、Diff 可见、PR 评审
+- <strong>路径</strong>：<code>registry/practices/&lt;practice_id&gt;.yaml</code>（一个实践一个文件）
+- <strong>CI 验证</strong>：模板字段完整性、ID 唯一性
+- <strong>Bot 通知</strong>：新提案自动通知三人决策小组</p>
+<p>注册表本身就是"Agent-as-Code"的体现——把组织实践当作代码来管理。</p>
+<h3 id="135_1">13.5 隐性知识蒸馏：实践注册表的核心挑战</h3>
+<blockquote>
+<p>理论参考：《AI 软件工程范式革命》将“场景驱动的隐性知识蒸馏”列为 AI 产线最大的瓶颈。</p>
+</blockquote>
+<p><strong>问题</strong>：传统 Wiki、Confluence、流程文档、ISO 文档的共同缺陷是——没有问题驱动，专家脑子里的经验直觉不会显化。文档越写越厚，Agent 越用越蠢。</p>
+<p><strong>解法——问题驱动的 Skill 沉淀闭环</strong>：</p>
+<div class="code-wrapper"><div class="code-top"><span>text</span><button class="copy-btn" type="button">copy</button></div><pre><code class="language-text">Agent 执行出错 / 产出不达标
+        ↓
+专家介入纠正（不是改代码，是改规则/约束/上下文）
+        ↓
+Harness Master 提取：这次纠正的本质是什么？
+        ↓
+写入 Skill / Blueprint / Checklist / Steering
+        ↓
+下一个同类任务 → Agent 自动应用新规则
+        ↓
+验证是否解决 → 若未解决，继续迭代
+</code></pre></div>
+<p><strong>关键设计</strong>：
+- 不是“先写文档再让 AI 学”，而是“AI 先犯错 → 人纠正 → 规则即时沉淀”
+- 每个 Skill 条目必须绑定一个<strong>真实触发场景</strong>（Scenario），而不是抽象最佳实践
+- Harness Master 负责审核提取的规则是否具有通用性，避免过度拟合个别案例
+- 实践注册表中的每个 Practice 都应包含 <code>trigger_scenario</code> 字段——说明什么情况下会触发这条规则</p>
+<p><strong>四个推进方向</strong>：
+1. <strong>让 AI 主动问“我为什么被纠正了”</strong>——Agent 在收到纠正时自动生成追问，帮助专家显化判断依据
+2. <strong>AI 跟随专家工作并主动观察提问</strong>——类似“学徒模式”，Agent 在旁边观察专家处理例外，记录决策模式
+3. <strong>建立场景化知识库格式</strong>——每个知识点必须包含：触发条件、正确做法、常见错误、反例、责任人
+4. <strong>AI 主动构造极端案例反向逼问专家</strong>——用对抗生成的方式，逼出专家未曾显化过的边界判断
+5. <strong>让 Agent 自己创建和迭代 Skill</strong>——Anthropic 在 Agent Skills 文章中明确将"Agent 自己创建、编辑、评估 Skill"列为未来方向<sup id="fnref:8"><a class="footnote-ref" href="#fn:8">7</a></sup>。这对应本框架中"问题驱动的 Skill 沉淀闭环"的终极形态：Agent 不再只是 Skill 的消费者，而是 Skill 的生产者和迭代者——出错 → 自我诊断 → 更新规则 → 下次自动应用</p>
+<hr />
+<p><strong>报告状态</strong>: v1.10 修订版
+- v1.9 → v1.10：新增 §4.4"与 Agent 的协作模式"——Agent 编排核心原则（五条）、"虚拟公司式多 Agent"批判（角色标签≠专业能力、顺序交接衰减上下文、预设步骤让 Agent 表演剧本）、过渡期三阶段 Agent 协作演化（Phase 0 个人 Agent → Phase 1 共享 Agent → Phase 2 团队 Agent）、AI Native 阶段 Mob Coding 实操方案（驾驶轮换规则 + 典型一天节奏 + 例外场景）
+- v1.8 → v1.9：三角色叙事重构——从"PO/BA+Dev+QA 进化"改为"PO+Dev+SM 铁三角极简版"。Harness QA → Harness Master 全局更名，角色定义从 QA/SQA 拓展改为 SM 拓展，职责从纯质量治理改为流程管理+质量治理双肩挑。§5.3 全面重写（双重职责表、核心职责分流程/质量两条线、能力模型调整为流程优先、典型一天从 SM 视角重构）。§5.1 AI Orchestrator 从 PO/BA 拓展改为 PO 拓展。§11 角色映射新增 SM→Harness Master 转型路径。
+- v1.7 → v1.8：引入 Anthropic 长时运行 Agent 研究与 auto mode 设计，新增 6 个团队-AI 协作工作模型（初始化-执行分离、特性清单驱动、清洁交接、一次一件事+端到端验证、分级信任边界、拒绝-重试），补充到 Squad 层交付节奏与 Harness QA 质量门设计；实践注册表新增 6 条、隐性知识蒸馏新增 Agent 自迭代方向
+- v1.0 → v1.1：移除 POMASA 误用于组织设计的部分
+- v1.1 → v1.2：重构为"内核 + 实例"双层框架，新增第 13 章和附录 F，使框架可持续接入新实践
+- v1.2 → v1.3：重新校准三角色定位——AI Orchestrator 是 PO 拓展、AI Engineer 是实现工程师、Harness QA 当时定义为资深测试工程师
+- v1.3 → v1.4：引入"四层提效模型"——Squad 是局部提效，整体提效杠杆在 VS/ART/Portfolio 三层。强化第 6 章 VS/ART 设计，新增第 7 章 Portfolio 治理，风险与角色映射按四层重组
+- v1.4 → v1.5：新增第 14-16 章评审与落地校准包，补充 stakeholder 评审议程、Pilot 选择评分卡、四层度量基线与 Phase 1 决策门
+- v1.5 → v1.6：重新定义 Harness QA 为质量治理 / SQA / 过程护栏角色，明确 QA 与 QC/V&amp;V/Tester 的分工，并将测试执行与验证任务主要交由 AI Agent 承担
+- v1.6 → v1.7：引入《AI 软件工程范式革命》的理论验证，新增“闭环优先”设计原则、“三类裁判系统”质量治理框架、AI 时代五类新岗位映射、4 项新风险（测试 Oracle/自证循环、模型供应商锁定、安全供应链、组织激励/隐性知识沉淀）、实践注册表“场景驱动的隐性知识蒸馏”机制</p>
+<p><strong>下一步</strong>:
+1. 用第 14 章议程组织一次 90 分钟 stakeholder review，先争取 Pilot Go / No-Go 决策，而不是批准全量重组
+2. 用第 15 章评分卡筛选 1-2 个 Phase 1 Pilot 候选场景，并明确宿主 VS 与业务方反馈窗口
+3. 确定 Phase 1 Pilot Squad 候选人（AI Orchestrator / AI Engineer / Harness Master），并确认“不裁员、角色进化”的沟通口径
+4. 启动 Squad Workspace 基础设施搭建，包括 Agent 基础设施、Skill/Blueprint 存储、质量门和审计记录
+5. 制定四层度量基线（Portfolio 价值/投入比、ART 协同效率、VS 流动效率、Squad 单元产出），并在 Pilot 前冻结当前基线
+6. 搭建实践注册表的 Git 仓库结构，确保 Pilot 产出的新实践能进入版本化管理
+7. 设计 Phase 2/3 中 <strong>VS / ART / Portfolio 三层的渐进激活计划</strong>，避免只复制 Squad 而没有整体提效</p>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:2">
+<p>Anthropic GitHub, <code>anthropics/skills/skill-creator/SKILL.md</code>, https://github.com/anthropics/skills/blob/main/skill-creator/SKILL.md&#160;<a class="footnote-backref" href="#fnref:2" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:2" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+<li id="fn:3">
+<p>Anthropic GitHub, <code>anthropics/skills/webapp-testing/SKILL.md</code>, https://github.com/anthropics/skills/blob/main/webapp-testing/SKILL.md&#160;<a class="footnote-backref" href="#fnref:3" title="Jump back to footnote 2 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:3" title="Jump back to footnote 2 in the text">&#8617;</a></p>
+</li>
+<li id="fn:4">
+<p>Anthropic GitHub, <code>anthropics/skills/mcp-builder/SKILL.md</code>, https://github.com/anthropics/skills/blob/main/mcp-builder/SKILL.md&#160;<a class="footnote-backref" href="#fnref:4" title="Jump back to footnote 3 in the text">&#8617;</a></p>
+</li>
+<li id="fn:5">
+<p>Anthropic GitHub, <code>anthropics/defending-code-reference-harness/README.md</code>, https://github.com/anthropics/defending-code-reference-harness/blob/main/README.md&#160;<a class="footnote-backref" href="#fnref:5" title="Jump back to footnote 4 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:5" title="Jump back to footnote 4 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:5" title="Jump back to footnote 4 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:5" title="Jump back to footnote 4 in the text">&#8617;</a></p>
+</li>
+<li id="fn:6">
+<p>Anthropic Engineering Blog, <em>Effective harnesses for long-running agents</em>, https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents&#160;<a class="footnote-backref" href="#fnref:6" title="Jump back to footnote 5 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:6" title="Jump back to footnote 5 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:6" title="Jump back to footnote 5 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:6" title="Jump back to footnote 5 in the text">&#8617;</a></p>
+</li>
+<li id="fn:7">
+<p>Anthropic Engineering Blog, <em>How we built Claude Code auto mode: a safer way to skip permissions</em>, https://www.anthropic.com/engineering/claude-code-auto-mode&#160;<a class="footnote-backref" href="#fnref:7" title="Jump back to footnote 6 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:7" title="Jump back to footnote 6 in the text">&#8617;</a></p>
+</li>
+<li id="fn:8">
+<p>Anthropic Engineering Blog, <em>Equipping agents for the real world with Agent Skills</em>, https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills&#160;<a class="footnote-backref" href="#fnref:8" title="Jump back to footnote 7 in the text">&#8617;</a></p>
+</li>
+<li id="fn:1">
+<p>Anthropic Engineering Blog, <em>Equipping agents for the real world with Agent Skills</em>, https://anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 8 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
+    </main>
+    <footer>Generated from Markdown · reports/ART原子化重组——AI原生交付的人机混合架构_整合报告.md</footer>
+  </div>
+  <script>
+    var tabIds = ["_2", "_3", "_4", "_5", "_6", "_7", "_8"];
+
+function toggleTheme(){
+  var html = document.documentElement;
+  var cur = html.getAttribute('data-theme');
+  var sys = window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var isDark = cur==='dark'||(cur===''&&sys)||(!cur&&sys);
+  var next = isDark?'light':'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('md-web-theme', next);
+  updateIcon();
+}
+function updateIcon(){
+  var html = document.documentElement;
+  var cur = html.getAttribute('data-theme');
+  var sys = window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var isDark = cur==='dark'||(cur===''&&sys)||(!cur&&sys);
+  document.getElementById('theme-icon').textContent = isDark ? '☀' : '☽';
+}
+updateIcon();
+
+document.querySelectorAll('.tab').forEach(function(tab){
+  tab.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+    tab.classList.add('active');
+    var target = document.getElementById(tab.dataset.target);
+    if(target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+document.addEventListener('keydown', function(e){
+  if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft') return;
+  var tabs = Array.from(document.querySelectorAll('.tab'));
+  if(!tabs.length) return;
+  var idx = tabs.findIndex(function(t){return t.classList.contains('active');});
+  var next = e.key==='ArrowRight'?(idx+1)%tabs.length:(idx-1+tabs.length)%tabs.length;
+  tabs[next].click();
+});
+
+document.querySelectorAll('.code-wrapper').forEach(function(w){
+  var btn = w.querySelector('.copy-btn');
+  if(!btn) return;
+  btn.onclick = function(){
+    var code = w.querySelector('code')||w.querySelector('pre');
+    navigator.clipboard.writeText(code.innerText).then(function(){
+      btn.textContent = '✓';
+      setTimeout(function(){ btn.textContent = 'copy'; }, 1500);
+    });
+  };
+});
+
+var searchInput = document.getElementById('search');
+var sortSelect = document.getElementById('sort');
+var resultCount = document.getElementById('result-count');
+var searchableBlocks = Array.from(document.querySelectorAll('#content > h1, #content > h2, #content > h3, #content > p, #content > ul, #content > ol, #content > blockquote, #content > .table-wrap, #content > .code-wrapper'));
+function applyFilters(){
+  var q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  var visible = 0;
+  searchableBlocks.forEach(function(node){
+    var hit = !q || node.innerText.toLowerCase().indexOf(q) !== -1;
+    node.classList.toggle('hidden-search', !hit);
+    if(hit) visible += 1;
+  });
+  if(sortSelect && sortSelect.value === 'heading' && !q) {
+    document.querySelectorAll('#content > h1, #content > h2').forEach(function(h){ h.style.outline = '1px solid var(--accent2)'; });
+  } else {
+    document.querySelectorAll('#content > h1, #content > h2').forEach(function(h){ h.style.outline = ''; });
+  }
+  if(resultCount) resultCount.textContent = visible + ' / ' + searchableBlocks.length;
+}
+if(searchInput) searchInput.addEventListener('input', applyFilters);
+if(sortSelect) sortSelect.addEventListener('change', applyFilters);
+applyFilters();
+
+  </script>
+</body>
+</html>
